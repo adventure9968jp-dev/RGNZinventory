@@ -27,6 +27,15 @@
         input, select, textarea { font-size: 16px !important; }
         
         .search-expand { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        /* 強制禁止圖片被選取或產生鬼影拖曳 */
+        img { 
+            -webkit-user-drag: none; 
+            -khtml-user-drag: none; 
+            -moz-user-drag: none; 
+            -o-user-drag: none; 
+            user-drag: none; 
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-slate-800 h-[100dvh] w-screen overflow-hidden">
@@ -144,7 +153,7 @@
             const [isSidebarOpen, setIsSidebarOpen] = useState(false);
             const [zoomedImage, setZoomedImage] = useState(null);
 
-            // 拖曳上傳狀態 (移除地圖拖曳相關狀態)
+            // 拖曳上傳狀態
             const [isItemDragOver, setIsItemDragOver] = useState(false);
 
             const mapRef = useRef(null);
@@ -179,8 +188,6 @@
             };
 
             // --- 拖曳處理函式 ---
-            // 移除地圖拖曳相關處理
-
             const handleItemDragOver = (e) => { e.preventDefault(); e.stopPropagation(); setIsItemDragOver(true); };
             const handleItemDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); setIsItemDragOver(false); };
             const handleItemDrop = async (e) => {
@@ -309,11 +316,13 @@
             const handleMouseDown = (e, id) => {
                 if (!isEditing) return;
                 e.stopPropagation();
+                e.preventDefault(); // 阻止原生拖曳
                 setDraggingId(id);
                 setActiveZone(inventoryData.find(z => z.id === id));
             };
             const handleTouchStart = (e, id) => {
                 if (!isEditing) return;
+                e.stopPropagation(); // 阻止事件傳遞給地圖容器
                 setDraggingId(id);
                 setActiveZone(inventoryData.find(z => z.id === id));
             };
@@ -391,8 +400,8 @@
                     </header>
 
                     <div className="flex flex-1 overflow-hidden relative">
-                        <main className="flex-1 relative bg-slate-200 overflow-auto flex items-center justify-center p-4">
-                            {/* 地圖容器改為 inline-block，寬高由圖片撐開，確保座標絕對準確 */}
+                        <main className="flex-1 relative bg-slate-200 overflow-auto md:overflow-hidden flex items-center justify-center p-0 md:p-0 transition-all duration-300">
+                            {/* 地圖容器 */}
                             <div 
                                 ref={mapRef} 
                                 className={`
@@ -403,8 +412,10 @@
                                 <img 
                                     src={mapImage} 
                                     alt="廠區平面圖" 
-                                    className="block max-w-full max-h-[85vh] object-contain bg-slate-100 select-none" 
-                                    style={{ minWidth: '300px' }} // 防止無圖時縮太小
+                                    className="block max-w-full max-h-[85vh] object-contain bg-slate-100 select-none pointer-events-none" 
+                                    draggable="false" 
+                                    onDragStart={(e) => e.preventDefault()} // 關鍵修改：完全禁止底圖被拖曳
+                                    style={{ minWidth: '300px' }} 
                                 />
                                 
                                 <div className="absolute top-2 right-2 md:top-4 md:right-4 z-30 flex flex-col gap-2">
@@ -438,7 +449,15 @@
                                     </div>
                                 )}
                                 {inventoryData.map((zone) => (
-                                    <div key={zone.id} onMouseDown={(e) => handleMouseDown(e, zone.id)} onTouchStart={(e) => handleTouchStart(e, zone.id)} onClick={() => { if (!isEditing) { setActiveZone(zone); setSearchTerm(''); setItemFormMode('closed'); } }} className={`absolute transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-75 z-10 ${activeZone?.id === zone.id ? 'scale-125 z-20' : ''} ${isEditing ? 'cursor-move' : 'cursor-pointer'} ${draggingId === zone.id ? 'scale-125 z-50 pointer-events-none' : ''}`} style={{ top: zone.coordinates.top, left: zone.coordinates.left, touchAction: 'none' }}>
+                                    <div 
+                                        key={zone.id} 
+                                        onMouseDown={(e) => handleMouseDown(e, zone.id)} 
+                                        onTouchStart={(e) => handleTouchStart(e, zone.id)} 
+                                        onClick={() => { if (!isEditing) { setActiveZone(zone); setSearchTerm(''); setItemFormMode('closed'); } }} 
+                                        className={`absolute transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-75 z-10 ${activeZone?.id === zone.id ? 'scale-125 z-20' : ''} ${isEditing ? 'cursor-move' : 'cursor-pointer'} ${draggingId === zone.id ? 'scale-125 z-50 pointer-events-none' : ''}`} 
+                                        style={{ top: zone.coordinates.top, left: zone.coordinates.left, touchAction: 'none' }}
+                                        draggable="false" // 禁止原生拖曳
+                                    >
                                         {!isEditing && <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${zone.color}`}></span>}
                                         <div className={`relative inline-flex items-center justify-center rounded-full shadow-lg border-2 border-white text-white ${zone.color} ${isEditing && 'ring-2 ring-white ring-offset-2 ring-offset-yellow-500'}`} style={{ width: `${markerSize}px`, height: `${markerSize}px` }}>
                                             <MapPin size={markerSize * 0.5} fill="currentColor" />
