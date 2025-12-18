@@ -119,10 +119,8 @@
             Download: (props) => <IconBase d={["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M7 10l5 5 5-5", "M12 15V3"]} {...props} />,
             FileJson: (props) => <IconBase d={["M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z", "M14 2v6h6", "M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1"]} {...props} />,
             Menu: (props) => <IconBase d={["M3 12h18", "M3 6h18", "M3 18h18"]} {...props} />,
-            ZoomIn: (props) => <IconBase d={["M12 5v14", "M5 12h14"]} {...props} />,
-            ZoomOut: (props) => <IconBase d={["M5 12h14"]} {...props} />,
         };
-        const { MapPin, X, Package, Search, Info, AlertCircle, CheckCircle, Smartphone, Upload, Edit3, Save, Plus, ImageIcon, Trash2, Pencil, Download, FileJson, Menu, ZoomIn, ZoomOut } = Icons;
+        const { MapPin, X, Package, Search, Info, AlertCircle, CheckCircle, Smartphone, Upload, Edit3, Save, Plus, ImageIcon, Trash2, Pencil, Download, FileJson, Menu } = Icons;
 
         const INITIAL_DATA = [
             {
@@ -642,22 +640,7 @@
                                 ))}
                             </div>
 
-                            <div className="absolute bottom-24 right-6 flex flex-col gap-2 z-30 ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-                                <button onClick={() => {
-                                    const newScale = Math.min(transformRef.current.scale + 0.5, 5);
-                                    transformRef.current.scale = newScale;
-                                    if (mapRef.current) mapRef.current.style.transition = 'transform 0.2s ease-out';
-                                    requestUpdateMapStyle();
-                                    setViewState({...transformRef.current});
-                                }} className="p-2 bg-white rounded-full shadow-lg text-slate-700 hover:bg-gray-100 border border-slate-200"><ZoomIn size={24}/></button>
-                                <button onClick={() => {
-                                    const newScale = Math.max(transformRef.current.scale - 0.5, 0.5);
-                                    transformRef.current.scale = newScale;
-                                    if (mapRef.current) mapRef.current.style.transition = 'transform 0.2s ease-out';
-                                    requestUpdateMapStyle();
-                                    setViewState({...transformRef.current});
-                                }} className="p-2 bg-white rounded-full shadow-lg text-slate-700 hover:bg-gray-100 border border-slate-200"><ZoomOut size={24}/></button>
-                            </div>
+                            {/* ... (移除 Zoom 按鈕區塊) ... */}
 
                             <div className="absolute top-2 right-2 md:top-4 md:right-4 z-30 flex flex-col gap-2 ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                                 <button onClick={() => { setIsEditing(!isEditing); setActiveZone(null); setItemFormMode('closed'); }} className={`px-3 py-2 rounded-lg shadow-md backdrop-blur-sm transition-all flex items-center gap-1 text-xs font-bold border ${isEditing ? 'bg-yellow-500 text-white border-yellow-600 animate-pulse' : 'bg-white/80 hover:bg-white text-slate-700 border-slate-200'}`}>
