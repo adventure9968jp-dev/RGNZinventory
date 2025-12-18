@@ -423,18 +423,39 @@
                 setItemFormMode('add');
             };
             const openEditMode = (item) => {
-                setFormData({ ...item });
+                // 如果是從搜尋進入，需要找出 item 的 zoneId
+                const zId = item.zoneId || (activeZone ? activeZone.id : null);
+                
+                setFormData({ ...item, zoneId: zId });
                 setOriginalItemId(item.id); 
                 setItemFormMode('edit');
             };
             const handleSaveItem = () => {
                 if (!formData.id || !formData.name) { alert('請輸入財產編號與名稱'); return; }
-                const itemToSave = { ...formData, image: formData.image || 'https://placehold.co/150/gray/white?text=No+Image' };
+                const itemToSave = { 
+                    ...formData, 
+                    image: formData.image || 'https://placehold.co/150/gray/white?text=No+Image' 
+                };
+                
+                // 確認目標區域 ID
+                const targetZoneId = formData.zoneId || (activeZone ? activeZone.id : null);
+                
+                if (!targetZoneId) return;
+
                 setInventoryData(prevData => prevData.map(zone => {
-                    if (zone.id === activeZone.id) {
-                        let newItems = itemFormMode === 'edit' ? zone.items.map(item => item.id === originalItemId ? itemToSave : item) : [itemToSave, ...zone.items];
+                    if (zone.id === targetZoneId) {
+                        let newItems;
+                        if (itemFormMode === 'edit') {
+                            newItems = zone.items.map(item => item.id === originalItemId ? itemToSave : item);
+                        } else {
+                            newItems = [itemToSave, ...zone.items];
+                        }
                         const updatedZone = { ...zone, items: newItems };
-                        setActiveZone(updatedZone);
+                        
+                        // 如果目前正顯示該區域，同步更新 activeZone
+                        if (activeZone && activeZone.id === targetZoneId) {
+                            setActiveZone(updatedZone);
+                        }
                         return updatedZone;
                     }
                     return zone;
@@ -442,12 +463,19 @@
                 setItemFormMode('closed');
                 setOriginalItemId(null);
             };
-            const handleDeleteItem = (itemId) => {
+            const handleDeleteItem = (itemId, itemZoneId) => {
                 if(!confirm('確定刪除？')) return;
+                
+                const targetZoneId = itemZoneId || (activeZone ? activeZone.id : null);
+                
+                if (!targetZoneId) return;
+
                 setInventoryData(prevData => prevData.map(zone => {
-                    if (zone.id === activeZone.id) {
+                    if (zone.id === targetZoneId) {
                         const updatedZone = { ...zone, items: zone.items.filter(item => item.id !== itemId) };
-                        setActiveZone(updatedZone);
+                        if (activeZone && activeZone.id === targetZoneId) {
+                            setActiveZone(updatedZone);
+                        }
                         return updatedZone;
                     }
                     return zone;
@@ -510,8 +538,11 @@
                 if (activeZone) return activeZone.items;
                 if (searchTerm.trim() !== '') {
                     const results = [];
+                    // 搜尋時加入 zoneId 資訊
                     inventoryData.forEach(zone => zone.items.forEach(item => {
-                        if (item.name.includes(searchTerm) || item.id.includes(searchTerm)) results.push({ ...item, zoneName: zone.name });
+                        if (item.name.includes(searchTerm) || item.id.includes(searchTerm)) {
+                            results.push({ ...item, zoneName: zone.name, zoneId: zone.id });
+                        }
                     }));
                     return results;
                 }
@@ -726,7 +757,7 @@
                                                         <StatusBadge status={item.status} />
                                                         {item.note && <p className="text-[10px] text-slate-500 mt-1 truncate border-t pt-1">{item.note}</p>}
                                                     </div>
-                                                    {activeZone && (<div className="absolute bottom-2 right-2 flex gap-2"><button onClick={() => openEditMode(item)} className="text-slate-400 hover:text-blue-500"><Pencil size={14} /></button><button onClick={() => handleDeleteItem(item.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={14} /></button></div>)}
+                                                    <div className="absolute bottom-2 right-2 flex gap-2"><button onClick={() => openEditMode(item)} className="text-slate-400 hover:text-blue-500"><Pencil size={14} /></button><button onClick={() => handleDeleteItem(item.id, item.zoneId)} className="text-slate-400 hover:text-red-500"><Trash2 size={14} /></button></div>
                                                 </div>
                                             )}
                                         </React.Fragment>
