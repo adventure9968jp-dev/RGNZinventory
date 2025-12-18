@@ -119,8 +119,10 @@
             Download: (props) => <IconBase d={["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M7 10l5 5 5-5", "M12 15V3"]} {...props} />,
             FileJson: (props) => <IconBase d={["M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z", "M14 2v6h6", "M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1"]} {...props} />,
             Menu: (props) => <IconBase d={["M3 12h18", "M3 6h18", "M3 18h18"]} {...props} />,
+            ZoomIn: (props) => <IconBase d={["M12 5v14", "M5 12h14"]} {...props} />,
+            ZoomOut: (props) => <IconBase d={["M5 12h14"]} {...props} />,
         };
-        const { MapPin, X, Package, Search, Info, AlertCircle, CheckCircle, Smartphone, Upload, Edit3, Save, Plus, ImageIcon, Trash2, Pencil, Download, FileJson, Menu } = Icons;
+        const { MapPin, X, Package, Search, Info, AlertCircle, CheckCircle, Smartphone, Upload, Edit3, Save, Plus, ImageIcon, Trash2, Pencil, Download, FileJson, Menu, ZoomIn, ZoomOut } = Icons;
 
         const INITIAL_DATA = [
             {
@@ -327,13 +329,10 @@
             useEffect(() => {
                 const el = mapContainerRef.current;
                 if (!el) return;
-                
-                // 使用 passive: false 以便能 preventDefault 阻止瀏覽器縮放
                 el.addEventListener('wheel', handleWheel, { passive: false });
                 el.addEventListener('touchstart', handleMapTouchStart, { passive: false });
                 el.addEventListener('touchmove', handleMapTouchMove, { passive: false });
                 el.addEventListener('touchend', handleMapTouchEnd);
-                
                 return () => {
                     el.removeEventListener('wheel', handleWheel);
                     el.removeEventListener('touchstart', handleMapTouchStart);
@@ -640,8 +639,6 @@
                                 ))}
                             </div>
 
-                            {/* ... (移除 Zoom 按鈕區塊) ... */}
-
                             <div className="absolute top-2 right-2 md:top-4 md:right-4 z-30 flex flex-col gap-2 ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                                 <button onClick={() => { setIsEditing(!isEditing); setActiveZone(null); setItemFormMode('closed'); }} className={`px-3 py-2 rounded-lg shadow-md backdrop-blur-sm transition-all flex items-center gap-1 text-xs font-bold border ${isEditing ? 'bg-yellow-500 text-white border-yellow-600 animate-pulse' : 'bg-white/80 hover:bg-white text-slate-700 border-slate-200'}`}>
                                     {isEditing ? <Save size={14} /> : <Edit3 size={14} />} {isEditing ? '完成' : '編輯'}
@@ -656,6 +653,15 @@
                                     </>
                                 )}
                             </div>
+
+                            {/* 在編輯模式下顯示標示大小滑桿 (左上角) */}
+                            {isEditing && (
+                                <div className="absolute top-2 left-2 z-30 flex flex-col gap-2 max-w-[200px] ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                                    <div className="bg-white/90 backdrop-blur px-2 py-1.5 rounded-lg shadow-md border border-slate-200 flex items-center gap-2 text-xs font-bold text-slate-700">
+                                        <span>標示大小</span> <input type="range" min="24" max="72" value={markerSize} onChange={(e) => setMarkerSize(Number(e.target.value))} className="w-20 accent-blue-600" />
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3 items-end ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                                 <div className="relative shadow-lg rounded-full w-12 h-12 md:w-64 bg-white/90 backdrop-blur-sm border border-slate-200 transition-all duration-300 ease-in-out focus-within:w-64 md:focus-within:w-80 group overflow-hidden search-expand flex items-center justify-end">
