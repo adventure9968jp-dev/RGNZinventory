@@ -626,14 +626,12 @@
                                             e.stopPropagation(); 
                                             if (!isEditing) { setActiveZone(zone); setSearchTerm(''); setItemFormMode('closed'); } 
                                         }} 
-                                        // 修改：定位點改為 -translate-y-1/2 (垂直置中)
-                                        className={`absolute transform -translate-x-1/2 -translate-y-1/2 z-10 ${activeZone?.id === zone.id ? 'z-20' : ''} ${isEditing ? 'cursor-move' : 'cursor-pointer'}`} 
+                                        className={`absolute transform -translate-x-1/2 -translate-y-full z-10 ${activeZone?.id === zone.id ? 'z-20' : ''} ${isEditing ? 'cursor-move' : 'cursor-pointer'}`} 
                                         style={{ top: zone.coordinates.top, left: zone.coordinates.left, touchAction: 'none' }}
                                     >
-                                        {/* 修改：變形原點改為 center center */}
-                                        <div style={{ transform: `scale(var(--map-scale-inverse, 1))`, transformOrigin: 'center center' }} className="flex flex-col items-center">
+                                        <div style={{ transform: `scale(var(--map-scale-inverse, 1))`, transformOrigin: 'bottom center' }} className="flex flex-col items-center">
                                             <div className="relative" style={{ width: `${markerSize}px`, height: `${markerSize}px` }}>
-                                                {!isEditing && <span className={`absolute inset-0 rounded-full animate-ping-small ${zone.color}`}></span>}
+                                                {!isEditing && <span style={{ transformOrigin: 'bottom center' }} className={`absolute inset-0 rounded-full animate-ping-small ${zone.color}`}></span>}
                                                 <div className={`relative w-full h-full inline-flex items-center justify-center rounded-full shadow-lg border-2 border-white text-white ${zone.color} ${isEditing && 'ring-2 ring-white ring-offset-2 ring-offset-yellow-500'}`}>
                                                     <MapPin size={markerSize * 0.5} fill="currentColor" />
                                                 </div>
