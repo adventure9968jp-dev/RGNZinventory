@@ -174,6 +174,8 @@
             const mapContainerRef = useRef(null);
             const mapRef = useRef(null);
             const lastTouchDistance = useRef(null);
+            // 新增：記錄雙指中心點，用於「向心縮放」
+            const lastTouchCenter = useRef(null); 
             const isDraggingMap = useRef(false);
             const lastMousePos = useRef({ x: 0, y: 0 });
 
@@ -206,7 +208,6 @@
             const updateMapStyle = () => {
                 if (mapRef.current) {
                     const { x, y, scale } = transformRef.current;
-                    // 使用 toFixed 減少浮點數抖動
                     const fixedX = x.toFixed(2);
                     const fixedY = y.toFixed(2);
                     const fixedScale = scale.toFixed(3);
@@ -219,7 +220,6 @@
 
             // 同步 state 到 ref (當使用按鈕縮放時)
             useEffect(() => {
-                // 只有當 state 和 ref 不同步時才執行，避免回圈
                 if (
                     viewState.x !== transformRef.current.x || 
                     viewState.y !== transformRef.current.y || 
@@ -239,10 +239,35 @@
                 if (e.ctrlKey || e.metaKey || !isSidebarOpen) {
                     e.preventDefault(); 
                     if (mapRef.current) mapRef.current.style.transition = 'none'; 
+                    
+                    const rect = mapContainerRef.current.getBoundingClientRect();
+                    // 計算滑鼠相對於容器中心的偏移量
+                    const mouseX = e.clientX - rect.left - rect.width / 2;
+                    const mouseY = e.clientY - rect.top - rect.height / 2;
+
                     const scaleSensitivity = 0.001;
                     const delta = -e.deltaY * scaleSensitivity;
-                    const newScale = Math.min(Math.max(0.5, transformRef.current.scale + delta), 5);
+                    const oldScale = transformRef.current.scale;
+                    const newScale = Math.min(Math.max(0.5, oldScale + delta), 5);
+                    
+                    // 修正：依照滑鼠位置進行補償，實現「向游標縮放」
+                    // 公式：x' = x - (mouseX / scale) * (newScale - scale)
+                    // 但因為我們是 transform-origin: center，所以：
+                    // x' = x - (mouseX - x) * (newScale/oldScale - 1) ... 近似推導
+                    // 更直觀的理解：地圖變大了，原本滑鼠指的點會向外跑，我們要把它拉回來
+                    
+                    const scaleRatio = newScale / oldScale;
+                    // 計算縮放造成的位移補償
+                    // 當前滑鼠在地圖座標系中的位置 (相對於地圖中心)
+                    const mapMouseX = (mouseX - transformRef.current.x) / oldScale;
+                    const mapMouseY = (mouseY - transformRef.current.y) / oldScale;
+
+                    // 新的位置應該要讓 mapMouseX * newScale + newX = mouseX
+                    // newX = mouseX - mapMouseX * newScale
+                    transformRef.current.x = mouseX - mapMouseX * newScale;
+                    transformRef.current.y = mouseY - mapMouseY * newScale;
                     transformRef.current.scale = newScale;
+
                     requestUpdateMapStyle();
                 }
             };
@@ -283,12 +308,15 @@
                         e.touches[0].clientY - e.touches[1].clientY
                     );
                     lastTouchDistance.current = dist;
+                    // 紀錄雙指中心點
+                    const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    lastTouchCenter.current = { x: cx, y: cy };
                 }
             };
 
             const handleMapTouchMove = (e) => {
                 if (draggingId) return;
-                // 防止瀏覽器預設行為 (如捲動頁面)
                 if (e.cancelable) e.preventDefault();
                 
                 if (e.touches.length === 1 && isDraggingMap.current) {
@@ -307,12 +335,39 @@
                         e.touches[0].clientY - e.touches[1].clientY
                     );
                     
-                    // 使用比例計算，更穩定
+                    // 計算新的雙指中心點
+                    const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+                    const rect = mapContainerRef.current.getBoundingClientRect();
+                    // 雙指中心相對於容器中心的偏移
+                    const touchCenterX = cx - rect.left - rect.width / 2;
+                    const touchCenterY = cy - rect.top - rect.height / 2;
+
                     const ratio = dist / lastTouchDistance.current;
-                    const newScale = Math.min(Math.max(0.5, transformRef.current.scale * ratio), 5);
+                    const oldScale = transformRef.current.scale;
+                    const newScale = Math.min(Math.max(0.5, oldScale * ratio), 5);
                     
+                    // 1. 先處理平移 (雙指一起移動)
+                    if (lastTouchCenter.current) {
+                        const dx = cx - lastTouchCenter.current.x;
+                        const dy = cy - lastTouchCenter.current.y;
+                        transformRef.current.x += dx;
+                        transformRef.current.y += dy;
+                    }
+
+                    // 2. 再處理向心縮放
+                    // 計算目前手指中心在地圖座標系的位置
+                    const mapTouchX = (touchCenterX - transformRef.current.x) / oldScale;
+                    const mapTouchY = (touchCenterY - transformRef.current.y) / oldScale;
+
+                    // 調整 x, y 使得縮放後該點仍對齊手指中心
+                    transformRef.current.x = touchCenterX - mapTouchX * newScale;
+                    transformRef.current.y = touchCenterY - mapTouchY * newScale;
+
                     transformRef.current.scale = newScale;
                     lastTouchDistance.current = dist;
+                    lastTouchCenter.current = { x: cx, y: cy };
                     requestUpdateMapStyle();
                 }
             };
@@ -321,18 +376,23 @@
                 if (e.touches.length === 0) {
                     isDraggingMap.current = false;
                     lastTouchDistance.current = null;
+                    lastTouchCenter.current = null;
                 } else if (e.touches.length === 1) {
                     lastMousePos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    lastTouchDistance.current = null;
+                    lastTouchCenter.current = null;
                 }
             };
 
             useEffect(() => {
                 const el = mapContainerRef.current;
                 if (!el) return;
+                
                 el.addEventListener('wheel', handleWheel, { passive: false });
                 el.addEventListener('touchstart', handleMapTouchStart, { passive: false });
                 el.addEventListener('touchmove', handleMapTouchMove, { passive: false });
                 el.addEventListener('touchend', handleMapTouchEnd);
+                
                 return () => {
                     el.removeEventListener('wheel', handleWheel);
                     el.removeEventListener('touchstart', handleMapTouchStart);
@@ -626,11 +686,9 @@
                                             e.stopPropagation(); 
                                             if (!isEditing) { setActiveZone(zone); setSearchTerm(''); setItemFormMode('closed'); } 
                                         }} 
-                                        // 修改：定位點改為 -translate-y-1/2 (垂直置中)
                                         className={`absolute transform -translate-x-1/2 -translate-y-1/2 z-10 ${activeZone?.id === zone.id ? 'z-20' : ''} ${isEditing ? 'cursor-move' : 'cursor-pointer'}`} 
                                         style={{ top: zone.coordinates.top, left: zone.coordinates.left, touchAction: 'none' }}
                                     >
-                                        {/* 修改：變形原點改為 center center */}
                                         <div style={{ transform: `scale(var(--map-scale-inverse, 1))`, transformOrigin: 'center center' }} className="flex flex-col items-center">
                                             <div className="relative" style={{ width: `${markerSize}px`, height: `${markerSize}px` }}>
                                                 {!isEditing && <span className={`absolute inset-0 rounded-full animate-ping-small ${zone.color}`}></span>}
