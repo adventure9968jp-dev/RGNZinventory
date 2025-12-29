@@ -164,7 +164,6 @@
             const [isSidebarOpen, setIsSidebarOpen] = useState(false);
             const [zoomedImage, setZoomedImage] = useState(null);
 
-            // Ref 作為手勢操作時的唯一真理來源
             const [viewState, setViewState] = useState({ scale: 1, x: 0, y: 0 });
             const transformRef = useRef({ scale: 1, x: 0, y: 0 });
             const tickingRef = useRef(false);
@@ -315,13 +314,9 @@
                         e.touches[0].clientY - e.touches[1].clientY
                     );
                     
-                    const rect = mapContainerRef.current.getBoundingClientRect();
-                    const touchCenterX = lastTouchCenter.current.x - rect.left - rect.width / 2;
-                    const touchCenterY = lastTouchCenter.current.y - rect.top - rect.height / 2;
-
+                    // 使用比例計算，更穩定
                     const ratio = dist / lastTouchDistance.current;
-                    const oldScale = transformRef.current.scale;
-                    const newScale = Math.min(Math.max(0.5, oldScale * ratio), 5);
+                    const newScale = Math.min(Math.max(0.5, transformRef.current.scale * ratio), 5);
                     
                     if (lastTouchCenter.current) {
                         const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
@@ -372,6 +367,7 @@
                 };
             }, [draggingId]); 
 
+            // --- 圖片壓縮 ---
             const handleImageUpload = async (event) => {
                 const file = event.target.files[0];
                 if (file) {
@@ -392,6 +388,7 @@
                 }
             };
 
+            // --- 座標拖曳邏輯 ---
             const handleMarkerMouseDown = (e, id) => {
                 if (!isEditing) return; 
                 e.stopPropagation(); e.preventDefault();
@@ -431,6 +428,7 @@
                 };
             }, [draggingId]);
 
+            // --- 一般功能函式 ---
             const handleItemDragOver = (e) => { e.preventDefault(); e.stopPropagation(); setIsItemDragOver(true); };
             const handleItemDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); setIsItemDragOver(false); };
             const handleItemDrop = async (e) => {
@@ -499,7 +497,6 @@
                 setOriginalItemId(null);
                 setOriginalZoneId(null);
             };
-
             const handleDeleteItem = (itemId, itemZoneId) => {
                 if(!confirm('確定刪除？')) return;
                 const targetZoneId = itemZoneId || (activeZone ? activeZone.id : null);
@@ -705,18 +702,29 @@
                                             if (!isEditing) { setActiveZone(zone); setSearchTerm(''); setItemFormMode('closed'); } 
                                         }} 
                                         className={`absolute transform -translate-x-1/2 -translate-y-1/2 z-10 ${activeZone?.id === zone.id ? 'z-20' : ''} ${isEditing ? 'cursor-move' : 'cursor-pointer'}`} 
-                                        style={{ top: zone.coordinates.top, left: zone.coordinates.left, touchAction: 'none' }}
+                                        style={{ 
+                                            top: zone.coordinates.top, 
+                                            left: zone.coordinates.left, 
+                                            touchAction: 'none',
+                                            pointerEvents: 'none' // 容器不感應點擊
+                                        }}
                                     >
                                         <div style={{ transform: `scale(var(--map-scale-inverse, 1))`, transformOrigin: 'center center' }} className="flex flex-col items-center">
                                             <div className="relative" style={{ width: `${markerSize}px`, height: `${markerSize}px` }}>
-                                                {!isEditing && <span className={`absolute inset-0 rounded-full animate-ping-small ${zone.color}`}></span>}
-                                                <div className={`relative w-full h-full inline-flex items-center justify-center rounded-full shadow-lg border-2 border-white text-white ${zone.color} ${isEditing && 'ring-2 ring-white ring-offset-2 ring-offset-yellow-500'}`}>
+                                                {!isEditing && <span className={`absolute inset-0 rounded-full animate-ping-small ${zone.color}`} style={{ pointerEvents: 'none' }}></span>}
+                                                <div 
+                                                    className={`relative w-full h-full inline-flex items-center justify-center rounded-full shadow-lg border-2 border-white text-white ${zone.color} ${isEditing && 'ring-2 ring-white ring-offset-2 ring-offset-yellow-500'}`}
+                                                    style={{ pointerEvents: 'auto', cursor: isEditing ? 'move' : 'pointer' }} // 圖示可感應點擊
+                                                >
                                                     <MapPin size={markerSize * 0.5} fill="currentColor" />
                                                 </div>
                                             </div>
 
                                             {(!isEditing || activeZone?.id === zone.id) && (
-                                                <div className="mt-1 px-2 py-0.5 bg-black/70 backdrop-blur-sm text-white text-[12px] font-medium rounded shadow-sm whitespace-nowrap border border-white/20 cursor-pointer">
+                                                <div 
+                                                    className="mt-1 px-2 py-0.5 bg-black/70 backdrop-blur-sm text-white text-[12px] font-medium rounded shadow-sm whitespace-nowrap border border-white/20"
+                                                    style={{ pointerEvents: 'auto', cursor: isEditing ? 'move' : 'pointer' }} // 文字標籤可感應點擊
+                                                >
                                                     {zone.name}
                                                 </div>
                                             )}
