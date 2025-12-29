@@ -47,12 +47,12 @@
         /* 自定義縮小的光暈動畫 (Halo Effect) */
         @keyframes ping-small {
             0% {
-                transform: scale(1); /* 修改：起始大小設為 1，即與本體一樣大 */
-                opacity: 0.6; /* 修改：起始透明度較高 (深) */
+                transform: scale(1); 
+                opacity: 0.6; 
             }
             100% {
-                transform: scale(2.0); /* 修改：擴散範圍適中 */
-                opacity: 0; /* 修改：結束時完全透明 */
+                transform: scale(2.0); 
+                opacity: 0; 
             }
         }
         .animate-ping-small {
@@ -378,11 +378,21 @@
             const handleMarkerMove = (clientX, clientY) => {
                 if (!draggingId || !mapRef.current) return;
                 const rect = mapRef.current.getBoundingClientRect();
+                
+                // 計算滑鼠相對於元素左上角的位移
                 let x = clientX - rect.left;
                 let y = clientY - rect.top;
+
+                // 轉成百分比
                 let leftPercent = Math.max(0, Math.min(100, (x / rect.width) * 100));
                 let topPercent = Math.max(0, Math.min(100, (y / rect.height) * 100));
-                setInventoryData(prev => prev.map(zone => zone.id === draggingId ? { ...zone, coordinates: { top: `${topPercent.toFixed(1)}%`, left: `${leftPercent.toFixed(1)}%` } } : zone));
+
+                setInventoryData(prev => prev.map(zone => {
+                    if (zone.id === draggingId) {
+                        return { ...zone, coordinates: { top: `${topPercent.toFixed(1)}%`, left: `${leftPercent.toFixed(1)}%` } };
+                    }
+                    return zone;
+                }));
             };
             const handleMarkerMouseMove = (e) => handleMarkerMove(e.clientX, e.clientY);
             const handleMarkerTouchMove = (e) => { 
@@ -423,39 +433,22 @@
                 setItemFormMode('add');
             };
             const openEditMode = (item) => {
-                // 如果是從搜尋進入，需要找出 item 的 zoneId
                 const zId = item.zoneId || (activeZone ? activeZone.id : null);
-                
                 setFormData({ ...item, zoneId: zId });
                 setOriginalItemId(item.id); 
                 setItemFormMode('edit');
             };
             const handleSaveItem = () => {
                 if (!formData.id || !formData.name) { alert('請輸入財產編號與名稱'); return; }
-                const itemToSave = { 
-                    ...formData, 
-                    image: formData.image || 'https://placehold.co/150/gray/white?text=No+Image' 
-                };
-                
-                // 確認目標區域 ID
+                const itemToSave = { ...formData, image: formData.image || 'https://placehold.co/150/gray/white?text=No+Image' };
                 const targetZoneId = formData.zoneId || (activeZone ? activeZone.id : null);
-                
                 if (!targetZoneId) return;
 
                 setInventoryData(prevData => prevData.map(zone => {
                     if (zone.id === targetZoneId) {
-                        let newItems;
-                        if (itemFormMode === 'edit') {
-                            newItems = zone.items.map(item => item.id === originalItemId ? itemToSave : item);
-                        } else {
-                            newItems = [itemToSave, ...zone.items];
-                        }
+                        let newItems = itemFormMode === 'edit' ? zone.items.map(item => item.id === originalItemId ? itemToSave : item) : [itemToSave, ...zone.items];
                         const updatedZone = { ...zone, items: newItems };
-                        
-                        // 如果目前正顯示該區域，同步更新 activeZone
-                        if (activeZone && activeZone.id === targetZoneId) {
-                            setActiveZone(updatedZone);
-                        }
+                        if (activeZone && activeZone.id === targetZoneId) { setActiveZone(updatedZone); }
                         return updatedZone;
                     }
                     return zone;
@@ -465,17 +458,12 @@
             };
             const handleDeleteItem = (itemId, itemZoneId) => {
                 if(!confirm('確定刪除？')) return;
-                
                 const targetZoneId = itemZoneId || (activeZone ? activeZone.id : null);
-                
                 if (!targetZoneId) return;
-
                 setInventoryData(prevData => prevData.map(zone => {
                     if (zone.id === targetZoneId) {
                         const updatedZone = { ...zone, items: zone.items.filter(item => item.id !== itemId) };
-                        if (activeZone && activeZone.id === targetZoneId) {
-                            setActiveZone(updatedZone);
-                        }
+                        if (activeZone && activeZone.id === targetZoneId) { setActiveZone(updatedZone); }
                         return updatedZone;
                     }
                     return zone;
@@ -538,7 +526,6 @@
                 if (activeZone) return activeZone.items;
                 if (searchTerm.trim() !== '') {
                     const results = [];
-                    // 搜尋時加入 zoneId 資訊
                     inventoryData.forEach(zone => zone.items.forEach(item => {
                         if (item.name.includes(searchTerm) || item.id.includes(searchTerm)) {
                             results.push({ ...item, zoneName: zone.name, zoneId: zone.id });
@@ -649,7 +636,8 @@
                                             e.stopPropagation(); 
                                             if (!isEditing) { setActiveZone(zone); setSearchTerm(''); setItemFormMode('closed'); } 
                                         }} 
-                                        className={`absolute transform -translate-x-1/2 -translate-y-1/2 z-10 ${activeZone?.id === zone.id ? 'z-20' : ''} ${isEditing ? 'cursor-move' : 'cursor-pointer'}`} 
+                                        // 修改：定位點改為 -translate-y-full，讓底部尖端對齊座標
+                                        className={`absolute transform -translate-x-1/2 -translate-y-full z-10 ${activeZone?.id === zone.id ? 'z-20' : ''} ${isEditing ? 'cursor-move' : 'cursor-pointer'}`} 
                                         style={{ top: zone.coordinates.top, left: zone.coordinates.left, touchAction: 'none' }}
                                     >
                                         <div style={{ transform: `scale(var(--map-scale-inverse, 1))`, transformOrigin: 'bottom center' }} className="flex flex-col items-center">
@@ -685,7 +673,6 @@
                                 )}
                             </div>
 
-                            {/* 在編輯模式下顯示標示大小滑桿 (左上角) */}
                             {isEditing && (
                                 <div className="absolute top-2 left-2 z-30 flex flex-col gap-2 max-w-[200px] ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                                     <div className="bg-white/90 backdrop-blur px-2 py-1.5 rounded-lg shadow-md border border-slate-200 flex items-center gap-2 text-xs font-bold text-slate-700">
