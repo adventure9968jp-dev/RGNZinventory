@@ -174,6 +174,9 @@
             const lastTouchCenter = useRef(null); 
             const isDraggingMap = useRef(false);
             const lastMousePos = useRef({ x: 0, y: 0 });
+            
+            // 雙擊縮放
+            const lastTapRef = useRef(0);
 
             const [isItemDragOver, setIsItemDragOver] = useState(false);
 
@@ -182,7 +185,7 @@
             const [itemFormMode, setItemFormMode] = useState('closed');
             const [formData, setFormData] = useState({ id: '', name: '', quantity: 1, unit: '台', status: 'normal', image: null, note: '', zoneId: '' });
             const [originalItemId, setOriginalItemId] = useState(null);
-            const [originalZoneId, setOriginalZoneId] = useState(null); // 新增：紀錄原始區域ID
+            const [originalZoneId, setOriginalZoneId] = useState(null);
             const itemFileInputRef = useRef(null);
 
             useEffect(() => {
@@ -225,7 +228,6 @@
             }, [viewState]);
 
             // --- 地圖操作邏輯 ---
-            
             const handleWheel = (e) => {
                 if (e.ctrlKey || e.metaKey || !isSidebarOpen) {
                     e.preventDefault(); 
@@ -238,7 +240,7 @@
                     const scaleSensitivity = 0.001;
                     const delta = -e.deltaY * scaleSensitivity;
                     const oldScale = transformRef.current.scale;
-                    const newScale = Math.min(Math.max(0.5, oldScale + delta), 5);
+                    const newScale = Math.min(Math.max(0.5, oldScale + delta), 10); // 修改：最大放大 10 倍
                     
                     const mapMouseX = (mouseX - transformRef.current.x) / oldScale;
                     const mapMouseY = (mouseY - transformRef.current.y) / oldScale;
@@ -274,13 +276,47 @@
                 }
             };
 
+            // 新增：雙擊放大邏輯
+            const handleDoubleTap = (clientX, clientY) => {
+                const now = Date.now();
+                if (now - lastTapRef.current < 300) {
+                    // Double tap detected
+                    const rect = mapContainerRef.current.getBoundingClientRect();
+                    const touchX = clientX - rect.left - rect.width / 2;
+                    const touchY = clientY - rect.top - rect.height / 2;
+
+                    const oldScale = transformRef.current.scale;
+                    const newScale = Math.min(oldScale * 2, 10); // 放大 2 倍，上限 10
+
+                    const mapTouchX = (touchX - transformRef.current.x) / oldScale;
+                    const mapTouchY = (touchY - transformRef.current.y) / oldScale;
+
+                    transformRef.current.x = touchX - mapTouchX * newScale;
+                    transformRef.current.y = touchY - mapTouchY * newScale;
+                    transformRef.current.scale = newScale;
+
+                    if (mapRef.current) mapRef.current.style.transition = 'transform 0.3s ease-out';
+                    requestUpdateMapStyle();
+                    
+                    // Reset tap to prevent triple tap weirdness
+                    lastTapRef.current = 0; 
+                    return true;
+                }
+                lastTapRef.current = now;
+                return false;
+            };
+
             const handleMapTouchStart = (e) => {
                 if (draggingId || e.target.closest('.ui-interactive')) return;
                 isDraggingMap.current = true;
                 if (mapRef.current) mapRef.current.style.transition = 'none'; 
 
                 if (e.touches.length === 1) {
-                    lastMousePos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    // 檢查雙擊
+                    const isDoubleTap = handleDoubleTap(e.touches[0].clientX, e.touches[0].clientY);
+                    if(!isDoubleTap) {
+                        lastMousePos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    }
                 } else if (e.touches.length === 2) {
                     const dist = Math.hypot(
                         e.touches[0].clientX - e.touches[1].clientX,
@@ -295,8 +331,7 @@
 
             const handleMapTouchMove = (e) => {
                 if (draggingId) return;
-                // 防止瀏覽器預設行為 (如捲動頁面)
-                if (e.cancelable) e.preventDefault();
+                if (e.cancelable) e.preventDefault(); // 強制接管，防止瀏覽器原生縮放
                 
                 if (e.touches.length === 1 && isDraggingMap.current) {
                     const dx = e.touches[0].clientX - lastMousePos.current.x;
@@ -314,9 +349,13 @@
                         e.touches[0].clientY - e.touches[1].clientY
                     );
                     
-                    // 使用比例計算，更穩定
+                    const rect = mapContainerRef.current.getBoundingClientRect();
+                    const touchCenterX = lastTouchCenter.current.x - rect.left - rect.width / 2;
+                    const touchCenterY = lastTouchCenter.current.y - rect.top - rect.height / 2;
+
                     const ratio = dist / lastTouchDistance.current;
-                    const newScale = Math.min(Math.max(0.5, transformRef.current.scale * ratio), 5);
+                    const oldScale = transformRef.current.scale;
+                    const newScale = Math.min(Math.max(0.5, oldScale * ratio), 10); // 修改：最大放大 10 倍
                     
                     if (lastTouchCenter.current) {
                         const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
@@ -706,16 +745,16 @@
                                             top: zone.coordinates.top, 
                                             left: zone.coordinates.left, 
                                             touchAction: 'none',
-                                            pointerEvents: 'none' // 容器不感應點擊
+                                            pointerEvents: 'none' // 容器不感應點擊，避免點到空白處觸發
                                         }}
                                     >
                                         <div style={{ transform: `scale(var(--map-scale-inverse, 1))`, transformOrigin: 'center center' }} className="flex flex-col items-center">
-                                            <div className="relative" style={{ width: `${markerSize}px`, height: `${markerSize}px` }}>
+                                            <div 
+                                                className="relative" 
+                                                style={{ width: `${markerSize}px`, height: `${markerSize}px`, pointerEvents: 'auto' }} // 只有圖示感應點擊
+                                            >
                                                 {!isEditing && <span className={`absolute inset-0 rounded-full animate-ping-small ${zone.color}`} style={{ pointerEvents: 'none' }}></span>}
-                                                <div 
-                                                    className={`relative w-full h-full inline-flex items-center justify-center rounded-full shadow-lg border-2 border-white text-white ${zone.color} ${isEditing && 'ring-2 ring-white ring-offset-2 ring-offset-yellow-500'}`}
-                                                    style={{ pointerEvents: 'auto', cursor: isEditing ? 'move' : 'pointer' }} // 圖示可感應點擊
-                                                >
+                                                <div className={`relative w-full h-full inline-flex items-center justify-center rounded-full shadow-lg border-2 border-white text-white ${zone.color} ${isEditing && 'ring-2 ring-white ring-offset-2 ring-offset-yellow-500'}`}>
                                                     <MapPin size={markerSize * 0.5} fill="currentColor" />
                                                 </div>
                                             </div>
@@ -723,7 +762,7 @@
                                             {(!isEditing || activeZone?.id === zone.id) && (
                                                 <div 
                                                     className="mt-1 px-2 py-0.5 bg-black/70 backdrop-blur-sm text-white text-[12px] font-medium rounded shadow-sm whitespace-nowrap border border-white/20"
-                                                    style={{ pointerEvents: 'auto', cursor: isEditing ? 'move' : 'pointer' }} // 文字標籤可感應點擊
+                                                    style={{ pointerEvents: 'auto' }} // 文字標籤也可感應
                                                 >
                                                     {zone.name}
                                                 </div>
