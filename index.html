@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>廠區盤點系統 (多裝置預覽版)</title>
+    <title>廠區盤點系統 (iPad 優化版)</title>
     
     <!-- PWA 設定 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -23,7 +23,6 @@
             overscroll-behavior: none;
             overflow: hidden;
             touch-action: none;
-            background-color: #1e293b; /* 深色背景襯托模擬器 */
         }
         input, select, textarea { font-size: 16px !important; }
         .search-expand { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -45,20 +44,23 @@
             -webkit-backface-visibility: hidden;
         }
 
-        /* 模擬器外框陰影與轉場 */
-        .device-frame {
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
+        /* 自定義縮小的光暈動畫 (Halo Effect) */
         @keyframes ping-small {
-            0% { transform: scale(1); opacity: 0.6; }
-            100% { transform: scale(2.0); opacity: 0; }
+            0% {
+                transform: scale(1); 
+                opacity: 0.6; 
+            }
+            100% {
+                transform: scale(2.0); 
+                opacity: 0; 
+            }
         }
-        .animate-ping-small { animation: ping-small 2s cubic-bezier(0, 0, 0.2, 1) infinite; }
+        .animate-ping-small {
+            animation: ping-small 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
     </style>
 </head>
-<body class="h-[100dvh] w-screen overflow-hidden flex items-center justify-center">
+<body class="bg-gray-50 text-slate-800 h-[100dvh] w-screen overflow-hidden">
     <div id="root" class="h-full w-full"></div>
 
     <script type="text/babel">
@@ -119,10 +121,8 @@
             Menu: (props) => <IconBase d={["M3 12h18", "M3 6h18", "M3 18h18"]} {...props} />,
             ZoomIn: (props) => <IconBase d={["M12 5v14", "M5 12h14"]} {...props} />,
             ZoomOut: (props) => <IconBase d={["M5 12h14"]} {...props} />,
-            Monitor: (props) => <IconBase d={["M20 3H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z", "M8 21h8", "M12 17v4"]} {...props} />,
-            Tablet: (props) => <IconBase d={["M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z", "M12 18h.01"]} {...props} />,
         };
-        const { MapPin, X, Package, Search, Info, AlertCircle, CheckCircle, Smartphone, Upload, Edit3, Save, Plus, ImageIcon, Trash2, Pencil, Download, FileJson, Menu, ZoomIn, ZoomOut, Monitor, Tablet } = Icons;
+        const { MapPin, X, Package, Search, Info, AlertCircle, CheckCircle, Smartphone, Upload, Edit3, Save, Plus, ImageIcon, Trash2, Pencil, Download, FileJson, Menu, ZoomIn, ZoomOut } = Icons;
 
         const INITIAL_DATA = [
             {
@@ -164,20 +164,24 @@
             const [isSidebarOpen, setIsSidebarOpen] = useState(false);
             const [zoomedImage, setZoomedImage] = useState(null);
 
-            // 裝置模擬狀態: 'full' (滿版/Desktop), 'ipad', 'iphone'
-            const [deviceMode, setDeviceMode] = useState('full');
-            const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-
+            // Ref 作為手勢操作時的唯一真理來源
             const [viewState, setViewState] = useState({ scale: 1, x: 0, y: 0 });
             const transformRef = useRef({ scale: 1, x: 0, y: 0 });
+            
+            // 效能優化：使用 ticking 鎖定 rAF
             const tickingRef = useRef(false);
+            
             const mapContainerRef = useRef(null);
             const mapRef = useRef(null);
             const lastTouchDistance = useRef(null);
+            // 新增：記錄雙指中心點，用於「向心縮放」
             const lastTouchCenter = useRef(null); 
             const isDraggingMap = useRef(false);
             const lastMousePos = useRef({ x: 0, y: 0 });
+
+            // 拖曳上傳狀態
             const [isItemDragOver, setIsItemDragOver] = useState(false);
+
             const fileInputRef = useRef(null);
             const dataInputRef = useRef(null);
             const [itemFormMode, setItemFormMode] = useState('closed');
@@ -186,24 +190,11 @@
             const itemFileInputRef = useRef(null);
 
             useEffect(() => {
-                const handleResize = () => setWindowWidth(window.innerWidth);
-                window.addEventListener('resize', handleResize);
-                return () => window.removeEventListener('resize', handleResize);
+                if (window.innerWidth < 768) setMarkerSize(36);
             }, []);
 
-            // 判斷是否為「手機版」顯示邏輯
-            // 如果是 iPhone 模式，或者在全螢幕模式下螢幕寬度小於 768px，則視為手機版
-            const isMobileView = deviceMode === 'iphone' || (deviceMode === 'full' && windowWidth < 768);
-            
-            // 根據不同模式自動調整標示大小
-            useEffect(() => {
-                if (isMobileView) {
-                    setMarkerSize(36);
-                } else {
-                    setMarkerSize(48);
-                }
-            }, [isMobileView]);
-
+            // 核心：直接操作 DOM 更新樣式，不透過 React 渲染
+            // 加入 ticking 檢查以節流
             const requestUpdateMapStyle = () => {
                 if (!tickingRef.current) {
                     requestAnimationFrame(() => {
@@ -217,14 +208,18 @@
             const updateMapStyle = () => {
                 if (mapRef.current) {
                     const { x, y, scale } = transformRef.current;
+                    // 使用 toFixed 減少浮點數抖動
                     const fixedX = x.toFixed(2);
                     const fixedY = y.toFixed(2);
                     const fixedScale = scale.toFixed(3);
+                    
                     mapRef.current.style.transform = `translate3d(${fixedX}px, ${fixedY}px, 0) scale(${fixedScale})`;
+                    // 更新 CSS 變數供子元素反向縮放
                     mapRef.current.style.setProperty('--map-scale-inverse', `${(1 / scale).toFixed(3)}`);
                 }
             };
 
+            // 同步 state 到 ref (當使用按鈕縮放時)
             useEffect(() => {
                 if (
                     viewState.x !== transformRef.current.x || 
@@ -238,6 +233,8 @@
                     }
                 }
             }, [viewState]);
+
+            // --- 地圖操作邏輯 ---
             
             const handleWheel = (e) => {
                 if (e.ctrlKey || e.metaKey || !isSidebarOpen) {
@@ -245,6 +242,7 @@
                     if (mapRef.current) mapRef.current.style.transition = 'none'; 
                     
                     const rect = mapContainerRef.current.getBoundingClientRect();
+                    // 計算滑鼠相對於容器中心的偏移量
                     const mouseX = e.clientX - rect.left - rect.width / 2;
                     const mouseY = e.clientY - rect.top - rect.height / 2;
 
@@ -253,9 +251,20 @@
                     const oldScale = transformRef.current.scale;
                     const newScale = Math.min(Math.max(0.5, oldScale + delta), 5);
                     
+                    // 修正：依照滑鼠位置進行補償，實現「向游標縮放」
+                    // 公式：x' = x - (mouseX / scale) * (newScale - scale)
+                    // 但因為我們是 transform-origin: center，所以：
+                    // x' = x - (mouseX - x) * (newScale/oldScale - 1) ... 近似推導
+                    // 更直觀的理解：地圖變大了，原本滑鼠指的點會向外跑，我們要把它拉回來
+                    
+                    const scaleRatio = newScale / oldScale;
+                    // 計算縮放造成的位移補償
+                    // 當前滑鼠在地圖座標系中的位置 (相對於地圖中心)
                     const mapMouseX = (mouseX - transformRef.current.x) / oldScale;
                     const mapMouseY = (mouseY - transformRef.current.y) / oldScale;
 
+                    // 新的位置應該要讓 mapMouseX * newScale + newX = mouseX
+                    // newX = mouseX - mapMouseX * newScale
                     transformRef.current.x = mouseX - mapMouseX * newScale;
                     transformRef.current.y = mouseY - mapMouseY * newScale;
                     transformRef.current.scale = newScale;
@@ -300,6 +309,7 @@
                         e.touches[0].clientY - e.touches[1].clientY
                     );
                     lastTouchDistance.current = dist;
+                    // 紀錄雙指中心點
                     const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
                     const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
                     lastTouchCenter.current = { x: cx, y: cy };
@@ -308,6 +318,7 @@
 
             const handleMapTouchMove = (e) => {
                 if (draggingId) return;
+                // 防止瀏覽器預設行為 (如捲動頁面)
                 if (e.cancelable) e.preventDefault();
                 
                 if (e.touches.length === 1 && isDraggingMap.current) {
@@ -326,26 +337,33 @@
                         e.touches[0].clientY - e.touches[1].clientY
                     );
                     
+                    // 計算新的雙指中心點
+                    const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+                    const rect = mapContainerRef.current.getBoundingClientRect();
+                    // 雙指中心相對於容器中心的偏移
+                    const touchCenterX = cx - rect.left - rect.width / 2;
+                    const touchCenterY = cy - rect.top - rect.height / 2;
+
                     const ratio = dist / lastTouchDistance.current;
                     const oldScale = transformRef.current.scale;
                     const newScale = Math.min(Math.max(0.5, oldScale * ratio), 5);
                     
+                    // 1. 先處理平移 (雙指一起移動)
                     if (lastTouchCenter.current) {
-                        const dx = (e.touches[0].clientX + e.touches[1].clientX)/2 - lastTouchCenter.current.x;
-                        const dy = (e.touches[0].clientY + e.touches[1].clientY)/2 - lastTouchCenter.current.y;
+                        const dx = cx - lastTouchCenter.current.x;
+                        const dy = cy - lastTouchCenter.current.y;
                         transformRef.current.x += dx;
                         transformRef.current.y += dy;
                     }
 
-                    const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-                    const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                    const rect = mapContainerRef.current.getBoundingClientRect();
-                    const touchCenterX = cx - rect.left - rect.width / 2;
-                    const touchCenterY = cy - rect.top - rect.height / 2;
-
+                    // 2. 再處理向心縮放
+                    // 計算目前手指中心在地圖座標系的位置
                     const mapTouchX = (touchCenterX - transformRef.current.x) / oldScale;
                     const mapTouchY = (touchCenterY - transformRef.current.y) / oldScale;
 
+                    // 調整 x, y 使得縮放後該點仍對齊手指中心
                     transformRef.current.x = touchCenterX - mapTouchX * newScale;
                     transformRef.current.y = touchCenterY - mapTouchY * newScale;
 
@@ -385,6 +403,7 @@
                 };
             }, [draggingId]); 
 
+            // --- 圖片壓縮 ---
             const handleImageUpload = async (event) => {
                 const file = event.target.files[0];
                 if (file) {
@@ -405,6 +424,7 @@
                 }
             };
 
+            // --- 座標拖曳邏輯 ---
             const handleMarkerMouseDown = (e, id) => {
                 if (!isEditing) return; 
                 e.stopPropagation(); e.preventDefault();
@@ -444,6 +464,7 @@
                 };
             }, [draggingId]);
 
+            // --- 一般功能函式 ---
             const handleItemDragOver = (e) => { e.preventDefault(); e.stopPropagation(); setIsItemDragOver(true); };
             const handleItemDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); setIsItemDragOver(false); };
             const handleItemDrop = async (e) => {
@@ -567,7 +588,8 @@
                 return [];
             }, [activeZone, searchTerm, inventoryData]);
 
-            useEffect(() => { if (activeZone && isMobileView) setIsSidebarOpen(true); }, [activeZone, isMobileView]);
+            useEffect(() => { if (activeZone && window.innerWidth < 768) setIsSidebarOpen(true); }, [activeZone]);
+            const showDesktopSidebar = activeZone || searchTerm;
 
             const renderItemForm = () => (
                 <div className="bg-slate-50 p-3 rounded-xl border border-blue-200 shadow-sm animate-in fade-in zoom-in-95 duration-200">
@@ -598,233 +620,204 @@
                 </div>
             );
 
-            // 裝置容器尺寸設定
-            const getContainerStyle = () => {
-                if (deviceMode === 'ipad') {
-                    return { width: '768px', height: '1024px', borderRadius: '24px', borderWidth: '12px', borderColor: '#333' };
-                } else if (deviceMode === 'iphone') {
-                    return { width: '375px', height: '812px', borderRadius: '40px', borderWidth: '12px', borderColor: '#333' };
-                }
-                return { width: '100%', height: '100%' };
-            };
-
             return (
-                <div className={`relative flex flex-col ${deviceMode === 'full' ? 'h-full w-full' : 'items-center justify-center p-8'} transition-all duration-500`}>
-                    
-                    {/* 裝置切換按鈕 (浮動於左下角) */}
-                    <div className="fixed bottom-6 left-6 z-[60] flex flex-col gap-2 bg-white/90 backdrop-blur p-2 rounded-xl shadow-xl border border-slate-200">
-                        <button 
-                            onClick={() => setDeviceMode('full')}
-                            className={`p-2 rounded-lg transition-all ${deviceMode === 'full' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}
-                            title="Desktop / Full Width"
-                        >
-                            <Monitor size={20} />
-                        </button>
-                        <button 
-                            onClick={() => setDeviceMode('ipad')}
-                            className={`p-2 rounded-lg transition-all ${deviceMode === 'ipad' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}
-                            title="iPad Simulation"
-                        >
-                            <Tablet size={20} />
-                        </button>
-                        <button 
-                            onClick={() => setDeviceMode('iphone')}
-                            className={`p-2 rounded-lg transition-all ${deviceMode === 'iphone' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}
-                            title="iPhone Simulation"
-                        >
-                            <Smartphone size={20} />
-                        </button>
-                    </div>
-
-                    {/* 模擬器外框容器 */}
-                    <div 
-                        className={`bg-gray-50 text-slate-800 font-sans overflow-hidden relative device-frame flex flex-col ${deviceMode !== 'full' ? 'shadow-2xl' : ''}`}
-                        style={getContainerStyle()}
-                    >
-                        {/* 這裡開始是原本的 App 內容 */}
-                        
-                        {zoomedImage && (
-                            <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200 cursor-zoom-out" onClick={() => setZoomedImage(null)}>
-                                <div className="relative max-w-full max-h-full flex flex-col items-center justify-center">
-                                    <img src={zoomedImage} className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" alt="放大預覽"/>
-                                    <div className="mt-4 flex items-center gap-2 text-white/80 bg-black/50 px-4 py-2 rounded-full text-sm"><span className="text-xs">再次點擊以關閉</span></div>
-                                    <button className="absolute -top-12 right-0 p-2 text-white/70 hover:text-white transition-colors"><X size={32} /></button>
-                                </div>
+                <div className="flex flex-col h-full bg-gray-50 text-slate-800 font-sans overflow-hidden">
+                    {zoomedImage && (
+                        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200 cursor-zoom-out" onClick={() => setZoomedImage(null)}>
+                            <div className="relative max-w-full max-h-full flex flex-col items-center justify-center">
+                                <img src={zoomedImage} className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" alt="放大預覽"/>
+                                <div className="mt-4 flex items-center gap-2 text-white/80 bg-black/50 px-4 py-2 rounded-full text-sm"><span className="text-xs">再次點擊以關閉</span></div>
+                                <button className="absolute -top-12 right-0 p-2 text-white/70 hover:text-white transition-colors"><X size={32} /></button>
                             </div>
-                        )}
+                        </div>
+                    )}
 
-                        <header className="bg-white border-b px-4 py-3 flex items-center justify-between shadow-sm z-20 shrink-0 h-16 safe-top">
-                            <div className="flex items-center gap-2 overflow-hidden">
-                                <div className="bg-blue-600 text-white p-1.5 rounded-lg shadow-blue-200 shadow-lg shrink-0"><Package size={20} /></div>
-                                <div className="min-w-0">
-                                    {isEditingTitle ? (
-                                        <input autoFocus className="text-lg font-bold text-slate-900 border-b-2 border-blue-500 focus:outline-none w-full bg-transparent" value={appTitle} onChange={(e) => setAppTitle(e.target.value)} onBlur={() => setIsEditingTitle(false)} />
-                                    ) : (
-                                        <h1 className="text-lg font-bold text-slate-900 cursor-pointer truncate flex items-center gap-1" onClick={() => setIsEditingTitle(true)}>
-                                            {appTitle} <Pencil size={12} className="text-slate-400" />
-                                        </h1>
-                                    )}
-                                </div>
+                    <header className="bg-white border-b px-4 py-3 flex items-center justify-between shadow-sm z-20 shrink-0 h-16 safe-top">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                            <div className="bg-blue-600 text-white p-1.5 rounded-lg shadow-blue-200 shadow-lg shrink-0"><Package size={20} /></div>
+                            <div className="min-w-0">
+                                {isEditingTitle ? (
+                                    <input autoFocus className="text-lg font-bold text-slate-900 border-b-2 border-blue-500 focus:outline-none w-full bg-transparent" value={appTitle} onChange={(e) => setAppTitle(e.target.value)} onBlur={() => setIsEditingTitle(false)} />
+                                ) : (
+                                    <h1 className="text-lg font-bold text-slate-900 cursor-pointer truncate flex items-center gap-1" onClick={() => setIsEditingTitle(true)}>
+                                        {appTitle} <Pencil size={12} className="text-slate-400" />
+                                    </h1>
+                                )}
                             </div>
-                            <div className="flex gap-2">
-                                <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className={`${!isMobileView ? 'hidden' : ''} p-2 bg-slate-100 rounded-full text-slate-600 active:bg-slate-200`}><Menu size={20} /></button>
-                            </div>
-                        </header>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden p-2 bg-slate-100 rounded-full text-slate-600 active:bg-slate-200"><Menu size={20} /></button>
+                        </div>
+                    </header>
 
-                        <div className="flex flex-1 overflow-hidden relative">
-                            <main 
-                                ref={mapContainerRef}
-                                className="flex-1 relative bg-slate-200 overflow-hidden flex items-center justify-center p-0 cursor-grab active:cursor-grabbing"
-                                style={{ touchAction: 'none' }}
-                                onMouseDown={handleMapMouseDown}
-                                onMouseMove={handleMapMouseMove}
-                                onMouseUp={handleMapMouseUp}
-                                onMouseLeave={handleMapMouseUp}
+                    <div className="flex flex-1 overflow-hidden relative">
+                        <main 
+                            ref={mapContainerRef}
+                            className="flex-1 relative bg-slate-200 overflow-hidden flex items-center justify-center p-0 cursor-grab active:cursor-grabbing"
+                            style={{ touchAction: 'none' }}
+                            onMouseDown={handleMapMouseDown}
+                            onMouseMove={handleMapMouseMove}
+                            onMouseUp={handleMapMouseUp}
+                            onMouseLeave={handleMapMouseUp}
+                        >
+                            <div 
+                                ref={mapRef} 
+                                className={`
+                                    relative inline-block shadow-2xl origin-center map-container
+                                    ${isEditing ? 'ring-4 ring-yellow-400 ring-opacity-50' : ''}
+                                `}
+                                style={{
+                                    transform: `translate3d(${viewState.x}px, ${viewState.y}px, 0) scale(${viewState.scale})`,
+                                    '--map-scale-inverse': `${(1 / viewState.scale).toFixed(3)}`
+                                }}
                             >
-                                <div 
-                                    ref={mapRef} 
-                                    className={`
-                                        relative inline-block shadow-2xl origin-center map-container
-                                        ${isEditing ? 'ring-4 ring-yellow-400 ring-opacity-50' : ''}
-                                    `}
-                                    style={{
-                                        transform: `translate3d(${viewState.x}px, ${viewState.y}px, 0) scale(${viewState.scale})`,
-                                        '--map-scale-inverse': `${(1 / viewState.scale).toFixed(3)}`
-                                    }}
-                                >
-                                    <img 
-                                        src={mapImage} 
-                                        alt="廠區平面圖" 
-                                        className="block max-w-full max-h-[85vh] object-contain bg-slate-100 select-none pointer-events-none" 
-                                        draggable="false" 
-                                        style={{ minWidth: '300px' }} 
-                                    />
-                                    
-                                    {inventoryData.map((zone) => (
-                                        <div 
-                                            key={zone.id} 
-                                            onMouseDown={(e) => handleMarkerMouseDown(e, zone.id)}
-                                            onTouchStart={(e) => handleMarkerTouchStart(e, zone.id)}
-                                            onClick={(e) => { 
-                                                e.stopPropagation(); 
-                                                if (!isEditing) { setActiveZone(zone); setSearchTerm(''); setItemFormMode('closed'); } 
-                                            }} 
-                                            className={`absolute transform -translate-x-1/2 -translate-y-1/2 z-10 ${activeZone?.id === zone.id ? 'z-20' : ''} ${isEditing ? 'cursor-move' : 'cursor-pointer'}`} 
-                                            style={{ top: zone.coordinates.top, left: zone.coordinates.left, touchAction: 'none' }}
-                                        >
-                                            <div style={{ transform: `scale(var(--map-scale-inverse, 1))`, transformOrigin: 'center center' }} className="flex flex-col items-center">
-                                                <div className="relative" style={{ width: `${markerSize}px`, height: `${markerSize}px` }}>
-                                                    {!isEditing && <span className={`absolute inset-0 rounded-full animate-ping-small ${zone.color}`}></span>}
-                                                    <div className={`relative w-full h-full inline-flex items-center justify-center rounded-full shadow-lg border-2 border-white text-white ${zone.color} ${isEditing && 'ring-2 ring-white ring-offset-2 ring-offset-yellow-500'}`}>
-                                                        <MapPin size={markerSize * 0.5} fill="currentColor" />
-                                                    </div>
+                                <img 
+                                    src={mapImage} 
+                                    alt="廠區平面圖" 
+                                    className="block max-w-full max-h-[85vh] object-contain bg-slate-100 select-none pointer-events-none" 
+                                    draggable="false" 
+                                    style={{ minWidth: '300px' }} 
+                                />
+                                
+                                {inventoryData.map((zone) => (
+                                    <div 
+                                        key={zone.id} 
+                                        onMouseDown={(e) => handleMarkerMouseDown(e, zone.id)}
+                                        onTouchStart={(e) => handleMarkerTouchStart(e, zone.id)}
+                                        onClick={(e) => { 
+                                            e.stopPropagation(); 
+                                            if (!isEditing) { setActiveZone(zone); setSearchTerm(''); setItemFormMode('closed'); } 
+                                        }} 
+                                        className={`absolute transform -translate-x-1/2 -translate-y-1/2 z-10 ${activeZone?.id === zone.id ? 'z-20' : ''} ${isEditing ? 'cursor-move' : 'cursor-pointer'}`} 
+                                        style={{ top: zone.coordinates.top, left: zone.coordinates.left, touchAction: 'none' }}
+                                    >
+                                        <div style={{ transform: `scale(var(--map-scale-inverse, 1))`, transformOrigin: 'center center' }} className="flex flex-col items-center">
+                                            <div className="relative" style={{ width: `${markerSize}px`, height: `${markerSize}px` }}>
+                                                {!isEditing && <span className={`absolute inset-0 rounded-full animate-ping-small ${zone.color}`}></span>}
+                                                <div className={`relative w-full h-full inline-flex items-center justify-center rounded-full shadow-lg border-2 border-white text-white ${zone.color} ${isEditing && 'ring-2 ring-white ring-offset-2 ring-offset-yellow-500'}`}>
+                                                    <MapPin size={markerSize * 0.5} fill="currentColor" />
                                                 </div>
-
-                                                {(!isEditing || activeZone?.id === zone.id) && (
-                                                    <div className="mt-1 px-2 py-0.5 bg-black/70 backdrop-blur-sm text-white text-[12px] font-medium rounded shadow-sm whitespace-nowrap pointer-events-none border border-white/20">
-                                                        {zone.name}
-                                                    </div>
-                                                )}
                                             </div>
-                                        </div>
-                                    ))}
-                                </div>
 
-                                <div className="absolute top-2 right-2 z-30 flex flex-col gap-2 ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-                                    <button onClick={() => { setIsEditing(!isEditing); setActiveZone(null); setItemFormMode('closed'); }} className={`px-3 py-2 rounded-lg shadow-md backdrop-blur-sm transition-all flex items-center gap-1 text-xs font-bold border ${isEditing ? 'bg-yellow-500 text-white border-yellow-600 animate-pulse' : 'bg-white/80 hover:bg-white text-slate-700 border-slate-200'}`}>
-                                        {isEditing ? <Save size={14} /> : <Edit3 size={14} />} {isEditing ? '完成' : '編輯'}
-                                    </button>
-                                    {isEditing && (
-                                        <button onClick={handleAddZone} className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg shadow-md backdrop-blur-sm transition-all flex items-center gap-1 text-xs font-bold border border-green-500"><Plus size={14} /> 新增座標</button>
-                                    )}
-                                    {!isEditing && (
+                                            {(!isEditing || activeZone?.id === zone.id) && (
+                                                <div className="mt-1 px-2 py-0.5 bg-black/70 backdrop-blur-sm text-white text-[12px] font-medium rounded shadow-sm whitespace-nowrap pointer-events-none border border-white/20">
+                                                    {zone.name}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="absolute top-2 right-2 md:top-4 md:right-4 z-30 flex flex-col gap-2 ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                                <button onClick={() => { setIsEditing(!isEditing); setActiveZone(null); setItemFormMode('closed'); }} className={`px-3 py-2 rounded-lg shadow-md backdrop-blur-sm transition-all flex items-center gap-1 text-xs font-bold border ${isEditing ? 'bg-yellow-500 text-white border-yellow-600 animate-pulse' : 'bg-white/80 hover:bg-white text-slate-700 border-slate-200'}`}>
+                                    {isEditing ? <Save size={14} /> : <Edit3 size={14} />} {isEditing ? '完成' : '編輯'}
+                                </button>
+                                {isEditing && (
+                                    <button onClick={handleAddZone} className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg shadow-md backdrop-blur-sm transition-all flex items-center gap-1 text-xs font-bold border border-green-500"><Plus size={14} /> 新增座標</button>
+                                )}
+                                {!isEditing && (
+                                    <>
+                                        <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                                        <button onClick={() => fileInputRef.current.click()} className="bg-white/80 hover:bg-white text-slate-700 px-3 py-2 rounded-lg shadow-md backdrop-blur-sm transition-all flex items-center gap-1 text-xs font-bold border border-slate-200"><Upload size={14} /> 換圖</button>
+                                    </>
+                                )}
+                            </div>
+
+                            {isEditing && (
+                                <div className="absolute top-2 left-2 z-30 flex flex-col gap-2 max-w-[200px] ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                                    <div className="bg-white/90 backdrop-blur px-2 py-1.5 rounded-lg shadow-md border border-slate-200 flex items-center gap-2 text-xs font-bold text-slate-700">
+                                        <span>標示大小</span> <input type="range" min="24" max="72" value={markerSize} onChange={(e) => setMarkerSize(Number(e.target.value))} className="w-20 accent-blue-600" />
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3 items-end ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                                <div className="relative shadow-lg rounded-full w-12 h-12 md:w-64 bg-white/90 backdrop-blur-sm border border-slate-200 transition-all duration-300 ease-in-out focus-within:w-64 md:focus-within:w-80 group overflow-hidden search-expand flex items-center justify-end">
+                                     <div className="absolute left-0 top-0 h-full w-12 flex items-center justify-center pointer-events-none text-slate-400 group-focus-within:text-blue-500"><Search size={20} /></div>
+                                     <input type="text" placeholder="搜尋財產編號或名稱..." className="w-full h-full pl-12 pr-10 py-2 bg-transparent text-sm focus:outline-none text-slate-700 font-medium placeholder:text-slate-400 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 md:opacity-100 cursor-pointer focus:cursor-text" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); if (e.target.value) { setActiveZone(null); setIsSidebarOpen(true); } }} />
+                                     {searchTerm && (<button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full z-10"><X size={14} /></button>)}
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={handleExportData} className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-sm font-bold transition-all transform hover:scale-105 border border-transparent"><Download size={16} /> 匯出</button>
+                                    <button onClick={() => dataInputRef.current.click()} className="bg-white hover:bg-gray-50 text-slate-700 px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-sm font-bold border border-gray-200 transition-all transform hover:scale-105"><FileJson size={16} /> 匯入</button>
+                                </div>
+                                <input type="file" ref={dataInputRef} onChange={handleImportData} accept=".json" className="hidden" />
+                            </div>
+                        </main>
+
+                        <aside className={`fixed inset-0 z-40 bg-white/95 backdrop-blur-sm border-slate-200 transition-all duration-300 ease-in-out flex flex-col overflow-hidden ${isSidebarOpen ? 'translate-y-0' : 'translate-y-full'} md:relative md:inset-auto md:translate-y-0 md:bg-white md:shadow-2xl md:z-auto ${showDesktopSidebar ? 'md:w-96 md:border-l' : 'md:w-0 md:border-none'}`}>
+                            <div className="md:hidden flex justify-center py-2" onClick={() => setIsSidebarOpen(false)}><div className="w-12 h-1.5 bg-slate-300 rounded-full"></div></div>
+                            <div className={`px-4 py-3 border-b flex items-start justify-between ${isEditing ? 'bg-yellow-50' : 'bg-slate-50'}`}>
+                                <div className="flex-1 mr-4">
+                                    {isEditing && activeZone ? (
+                                        <div className="space-y-2 animate-in fade-in">
+                                            <div className="flex items-center gap-2 text-yellow-700 font-bold text-xs"><Edit3 size={12}/> 編輯分區</div>
+                                            <input type="text" value={activeZone.name} onChange={(e) => handleUpdateZone('name', e.target.value)} className="w-full px-2 py-1.5 border rounded bg-white font-bold text-slate-800 text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
+                                            <div className="grid grid-cols-8 gap-2 mt-2">
+                                                {['bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500', 'bg-lime-500', 'bg-green-500', 'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-sky-500', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500', 'bg-slate-500', 'bg-gray-500', 'bg-zinc-500', 'bg-neutral-500', 'bg-stone-500', 'bg-red-700', 'bg-orange-700', 'bg-green-700', 'bg-blue-700', 'bg-purple-700', 'bg-pink-700', 'bg-gray-700', 'bg-red-400', 'bg-blue-400', 'bg-green-400'].map(c => (
+                                                    <button key={c} onClick={() => handleUpdateZone('color', c)} className={`w-6 h-6 rounded-full ${c} ${activeZone.color === c ? 'ring-2 ring-offset-1 ring-slate-600 scale-110' : 'hover:scale-110'} transition-transform shadow-sm`} />
+                                                ))}
+                                            </div>
+                                            <button onClick={handleDeleteZone} className="w-full mt-4 bg-red-100 text-red-600 py-1.5 rounded border border-red-200 text-xs font-bold flex items-center justify-center gap-1 hover:bg-red-200"><Trash2 size={12} /> 刪除此區域</button>
+                                        </div>
+                                    ) : (
                                         <>
-                                            <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
-                                            <button onClick={() => fileInputRef.current.click()} className="bg-white/80 hover:bg-white text-slate-700 px-3 py-2 rounded-lg shadow-md backdrop-blur-sm transition-all flex items-center gap-1 text-xs font-bold border border-slate-200"><Upload size={14} /> 換圖</button>
+                                            <h2 className="text-lg font-bold text-slate-800">{activeZone ? activeZone.name : (searchTerm ? '搜尋結果' : '清單')}</h2>
+                                            <p className="text-xs text-slate-500 mt-0.5">{activeZone ? activeZone.description : (searchTerm ? `關鍵字: "${searchTerm}"` : '請點擊地圖區域')}</p>
                                         </>
                                     )}
                                 </div>
+                                <button onClick={() => { setActiveZone(null); setSearchTerm(''); setIsSidebarOpen(false); }} className="p-1 hover:bg-slate-200 rounded-full"><X size={20} className="text-slate-500" /></button>
+                            </div>
 
-                                {isEditing && (
-                                    <div className="absolute top-2 left-2 z-30 flex flex-col gap-2 max-w-[200px] ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-                                        <div className="bg-white/90 backdrop-blur px-2 py-1.5 rounded-lg shadow-md border border-slate-200 flex items-center gap-2 text-xs font-bold text-slate-700">
-                                            <span>標示大小</span> <input type="range" min="24" max="72" value={markerSize} onChange={(e) => setMarkerSize(Number(e.target.value))} className="w-20 accent-blue-600" />
-                                        </div>
-                                    </div>
+                            <div className="flex-1 overflow-y-auto p-4 safe-bottom pb-32">
+                                {activeZone && itemFormMode === 'add' && renderItemForm()}
+                                {activeZone && itemFormMode !== 'add' && !isEditing && (
+                                    <button onClick={openAddMode} className="w-full mb-4 py-2 border-2 border-dashed border-blue-300 text-blue-600 rounded-xl flex items-center justify-center gap-1 hover:bg-blue-50 font-bold text-sm"><Plus size={16} /> 新增項目</button>
                                 )}
-
-                                <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3 items-end ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-                                    <div className="relative shadow-lg rounded-full w-12 h-12 md:w-64 bg-white/90 backdrop-blur-sm border border-slate-200 transition-all duration-300 ease-in-out focus-within:w-64 md:focus-within:w-80 group overflow-hidden search-expand flex items-center justify-end">
-                                        <div className="absolute left-0 top-0 h-full w-12 flex items-center justify-center pointer-events-none text-slate-400 group-focus-within:text-blue-500"><Search size={20} /></div>
-                                        <input type="text" placeholder="搜尋財產編號或名稱..." className="w-full h-full pl-12 pr-10 py-2 bg-transparent text-sm focus:outline-none text-slate-700 font-medium placeholder:text-slate-400 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 md:opacity-100 cursor-pointer focus:cursor-text" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); if (e.target.value) { setActiveZone(null); setIsSidebarOpen(true); } }} />
-                                        {searchTerm && (<button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full z-10"><X size={14} /></button>)}
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={handleExportData} className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-sm font-bold transition-all transform hover:scale-105 border border-transparent"><Download size={16} /> 匯出</button>
-                                        <button onClick={() => dataInputRef.current.click()} className="bg-white hover:bg-gray-50 text-slate-700 px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-sm font-bold border border-gray-200 transition-all transform hover:scale-105"><FileJson size={16} /> 匯入</button>
-                                    </div>
-                                    <input type="file" ref={dataInputRef} onChange={handleImportData} accept=".json" className="hidden" />
-                                </div>
-                            </main>
-
-                            <aside className={`fixed inset-0 z-40 bg-white/95 backdrop-blur-sm border-slate-200 transition-all duration-300 ease-in-out flex flex-col overflow-hidden ${isSidebarOpen ? 'translate-y-0' : 'translate-y-full'} ${!isMobileView ? 'relative inset-auto translate-y-0 bg-white shadow-2xl z-auto ' + ((activeZone || searchTerm) ? 'w-96 border-l' : 'w-0 border-none') : ''}`}>
-                                <div className={`${!isMobileView ? 'hidden' : ''} flex justify-center py-2`} onClick={() => setIsSidebarOpen(false)}><div className="w-12 h-1.5 bg-slate-300 rounded-full"></div></div>
-                                <div className={`px-4 py-3 border-b flex items-start justify-between ${isEditing ? 'bg-yellow-50' : 'bg-slate-50'}`}>
-                                    <div className="flex-1 mr-4">
-                                        {isEditing && activeZone ? (
-                                            <div className="space-y-2 animate-in fade-in">
-                                                <div className="flex items-center gap-2 text-yellow-700 font-bold text-xs"><Edit3 size={12}/> 編輯分區</div>
-                                                <input type="text" value={activeZone.name} onChange={(e) => handleUpdateZone('name', e.target.value)} className="w-full px-2 py-1.5 border rounded bg-white font-bold text-slate-800 text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
-                                                <div className="grid grid-cols-8 gap-2 mt-2">
-                                                    {['bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500', 'bg-lime-500', 'bg-green-500', 'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-sky-500', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500', 'bg-slate-500', 'bg-gray-500', 'bg-zinc-500', 'bg-neutral-500', 'bg-stone-500', 'bg-red-700', 'bg-orange-700', 'bg-green-700', 'bg-blue-700', 'bg-purple-700', 'bg-pink-700', 'bg-gray-700', 'bg-red-400', 'bg-blue-400', 'bg-green-400'].map(c => (
-                                                        <button key={c} onClick={() => handleUpdateZone('color', c)} className={`w-6 h-6 rounded-full ${c} ${activeZone.color === c ? 'ring-2 ring-offset-1 ring-slate-600 scale-110' : 'hover:scale-110'} transition-transform shadow-sm`} />
-                                                    ))}
-                                                </div>
-                                                <button onClick={handleDeleteZone} className="w-full mt-4 bg-red-100 text-red-600 py-1.5 rounded border border-red-200 text-xs font-bold flex items-center justify-center gap-1 hover:bg-red-200"><Trash2 size={12} /> 刪除此區域</button>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <h2 className="text-lg font-bold text-slate-800">{activeZone ? activeZone.name : (searchTerm ? '搜尋結果' : '清單')}</h2>
-                                                <p className="text-xs text-slate-500 mt-0.5">{activeZone ? activeZone.description : (searchTerm ? `關鍵字: "${searchTerm}"` : '請點擊地圖區域')}</p>
-                                            </>
-                                        )}
-                                    </div>
-                                    <button onClick={() => { setActiveZone(null); setSearchTerm(''); setIsSidebarOpen(false); }} className="p-1 hover:bg-slate-200 rounded-full"><X size={20} className="text-slate-500" /></button>
-                                </div>
-
-                                <div className="flex-1 overflow-y-auto p-4 safe-bottom pb-32">
-                                    {activeZone && itemFormMode === 'add' && renderItemForm()}
-                                    {activeZone && itemFormMode !== 'add' && !isEditing && (
-                                        <button onClick={openAddMode} className="w-full mb-4 py-2 border-2 border-dashed border-blue-300 text-blue-600 rounded-xl flex items-center justify-center gap-1 hover:bg-blue-50 font-bold text-sm"><Plus size={16} /> 新增項目</button>
-                                    )}
-                                    <div className="space-y-3">
-                                        {displayItems.length > 0 ? displayItems.map((item) => (
-                                            <React.Fragment key={item.id}>
-                                                {itemFormMode === 'edit' && originalItemId === item.id ? (
-                                                    renderItemForm()
-                                                ) : (
-                                                    <div className="bg-white border rounded-xl p-2 shadow-sm flex gap-3 items-start relative hover:shadow-md transition-shadow">
-                                                        <div className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0 border cursor-zoom-in hover:opacity-90 transition-opacity" onClick={(e) => { e.stopPropagation(); setZoomedImage(item.image); }} title="點擊放大">
-                                                            <img src={item.image} className="w-full h-full object-cover" alt={item.name} />
-                                                        </div>
-                                                        <div className="flex-1 min-w-0 pt-0.5">
-                                                            <h3 className="font-bold text-slate-800 truncate text-sm">{item.name}</h3><p className="text-[10px] text-slate-400 font-mono mb-1">{item.id}</p>
-                                                            <div className="flex items-center gap-1 mb-1">
-                                                                <span className="text-[10px] bg-slate-100 text-slate-600 px-1 py-0.5 rounded border">{item.quantity} {item.unit}</span>
-                                                                {item.zoneName && <span className="text-[10px] bg-blue-50 text-blue-600 px-1 py-0.5 rounded border border-blue-100 flex items-center gap-0.5"><MapPin size={8} /> {item.zoneName}</span>}
-                                                            </div>
-                                                            <StatusBadge status={item.status} />
-                                                            {item.note && <p className="text-[10px] text-slate-500 mt-1 truncate border-t pt-1">{item.note}</p>}
-                                                        </div>
-                                                        <div className="absolute bottom-2 right-2 flex gap-2"><button onClick={() => openEditMode(item)} className="text-slate-400 hover:text-blue-500"><Pencil size={14} /></button><button onClick={() => handleDeleteItem(item.id, item.zoneId)} className="text-slate-400 hover:text-red-500"><Trash2 size={14} /></button></div>
+                                <div className="space-y-3">
+                                    {displayItems.length > 0 ? displayItems.map((item) => (
+                                        <React.Fragment key={item.id}>
+                                            {itemFormMode === 'edit' && originalItemId === item.id ? (
+                                                renderItemForm()
+                                            ) : (
+                                                <div className="bg-white border rounded-xl p-2 shadow-sm flex gap-3 items-start relative hover:shadow-md transition-shadow">
+                                                    <div className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0 border cursor-zoom-in hover:opacity-90 transition-opacity" onClick={(e) => { e.stopPropagation(); setZoomedImage(item.image); }} title="點擊放大">
+                                                        <img src={item.image} className="w-full h-full object-cover" alt={item.name} />
                                                     </div>
-                                                )}
-                                            </React.Fragment>
-                                        )) : <div className="text-center py-8 text-slate-400"><Package size={32} className="mx-auto mb-2 opacity-20" /><p className="text-xs">無資料</p></div>}
-                                    </div>
+                                                    <div className="flex-1 min-w-0 pt-0.5">
+                                                        <h3 className="font-bold text-slate-800 truncate text-sm">{item.name}</h3><p className="text-[10px] text-slate-400 font-mono mb-1">{item.id}</p>
+                                                        <div className="flex items-center gap-1 mb-1">
+                                                            <span className="text-[10px] bg-slate-100 text-slate-600 px-1 py-0.5 rounded border">{item.quantity} {item.unit}</span>
+                                                            {item.zoneName && (
+                                                                <span 
+                                                                    className="text-[10px] bg-blue-50 text-blue-600 px-1 py-0.5 rounded border border-blue-100 flex items-center gap-0.5 cursor-pointer hover:bg-blue-100"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        const targetZone = inventoryData.find(z => z.id === item.zoneId);
+                                                                        if (targetZone) {
+                                                                            setActiveZone(targetZone);
+                                                                            setSearchTerm('');
+                                                                            setIsSidebarOpen(true);
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <MapPin size={8} /> {item.zoneName}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <StatusBadge status={item.status} />
+                                                        {item.note && <p className="text-[10px] text-slate-500 mt-1 truncate border-t pt-1">{item.note}</p>}
+                                                    </div>
+                                                    <div className="absolute bottom-2 right-2 flex gap-2"><button onClick={() => openEditMode(item)} className="text-slate-400 hover:text-blue-500"><Pencil size={14} /></button><button onClick={() => handleDeleteItem(item.id, item.zoneId)} className="text-slate-400 hover:text-red-500"><Trash2 size={14} /></button></div>
+                                                </div>
+                                            )}
+                                        </React.Fragment>
+                                    )) : <div className="text-center py-8 text-slate-400"><Package size={32} className="mx-auto mb-2 opacity-20" /><p className="text-xs">無資料</p></div>}
                                 </div>
-                            </aside>
-                        </div>
+                            </div>
+                        </aside>
                     </div>
                 </div>
             );
