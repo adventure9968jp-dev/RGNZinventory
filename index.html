@@ -251,20 +251,10 @@
                     const oldScale = transformRef.current.scale;
                     const newScale = Math.min(Math.max(0.5, oldScale + delta), 5);
                     
-                    // 修正：依照滑鼠位置進行補償，實現「向游標縮放」
-                    // 公式：x' = x - (mouseX / scale) * (newScale - scale)
-                    // 但因為我們是 transform-origin: center，所以：
-                    // x' = x - (mouseX - x) * (newScale/oldScale - 1) ... 近似推導
-                    // 更直觀的理解：地圖變大了，原本滑鼠指的點會向外跑，我們要把它拉回來
-                    
                     const scaleRatio = newScale / oldScale;
-                    // 計算縮放造成的位移補償
-                    // 當前滑鼠在地圖座標系中的位置 (相對於地圖中心)
                     const mapMouseX = (mouseX - transformRef.current.x) / oldScale;
                     const mapMouseY = (mouseY - transformRef.current.y) / oldScale;
 
-                    // 新的位置應該要讓 mapMouseX * newScale + newX = mouseX
-                    // newX = mouseX - mapMouseX * newScale
                     transformRef.current.x = mouseX - mapMouseX * newScale;
                     transformRef.current.y = mouseY - mapMouseY * newScale;
                     transformRef.current.scale = newScale;
@@ -578,11 +568,21 @@
                 if (activeZone) return activeZone.items;
                 if (searchTerm.trim() !== '') {
                     const results = [];
-                    inventoryData.forEach(zone => zone.items.forEach(item => {
-                        if (item.name.includes(searchTerm) || item.id.includes(searchTerm)) {
-                            results.push({ ...item, zoneName: zone.name, zoneId: zone.id });
+                    inventoryData.forEach(zone => {
+                        if (zone.name.includes(searchTerm)) {
+                            results.push({
+                                id: zone.id,
+                                name: zone.name,
+                                description: zone.description,
+                                type: 'zone' 
+                            });
                         }
-                    }));
+                        zone.items.forEach(item => {
+                            if (item.name.includes(searchTerm) || item.id.includes(searchTerm)) {
+                                results.push({ ...item, zoneName: zone.name, zoneId: zone.id, type: 'item' });
+                            }
+                        });
+                    });
                     return results;
                 }
                 return [];
@@ -709,6 +709,23 @@
                                 ))}
                             </div>
 
+                            <div className="absolute bottom-24 right-6 flex flex-col gap-2 z-30 ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                                <button onClick={() => {
+                                    const newScale = Math.min(transformRef.current.scale + 0.5, 5);
+                                    transformRef.current.scale = newScale;
+                                    if (mapRef.current) mapRef.current.style.transition = 'transform 0.2s ease-out';
+                                    requestUpdateMapStyle();
+                                    setViewState({...transformRef.current});
+                                }} className="p-2 bg-white rounded-full shadow-lg text-slate-700 hover:bg-gray-100 border border-slate-200"><ZoomIn size={24}/></button>
+                                <button onClick={() => {
+                                    const newScale = Math.max(transformRef.current.scale - 0.5, 0.5);
+                                    transformRef.current.scale = newScale;
+                                    if (mapRef.current) mapRef.current.style.transition = 'transform 0.2s ease-out';
+                                    requestUpdateMapStyle();
+                                    setViewState({...transformRef.current});
+                                }} className="p-2 bg-white rounded-full shadow-lg text-slate-700 hover:bg-gray-100 border border-slate-200"><ZoomOut size={24}/></button>
+                            </div>
+
                             <div className="absolute top-2 right-2 md:top-4 md:right-4 z-30 flex flex-col gap-2 ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                                 <button onClick={() => { setIsEditing(!isEditing); setActiveZone(null); setItemFormMode('closed'); }} className={`px-3 py-2 rounded-lg shadow-md backdrop-blur-sm transition-all flex items-center gap-1 text-xs font-bold border ${isEditing ? 'bg-yellow-500 text-white border-yellow-600 animate-pulse' : 'bg-white/80 hover:bg-white text-slate-700 border-slate-200'}`}>
                                     {isEditing ? <Save size={14} /> : <Edit3 size={14} />} {isEditing ? '完成' : '編輯'}
@@ -735,7 +752,7 @@
                             <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3 items-end ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                                 <div className="relative shadow-lg rounded-full w-12 h-12 md:w-64 bg-white/90 backdrop-blur-sm border border-slate-200 transition-all duration-300 ease-in-out focus-within:w-64 md:focus-within:w-80 group overflow-hidden search-expand flex items-center justify-end">
                                      <div className="absolute left-0 top-0 h-full w-12 flex items-center justify-center pointer-events-none text-slate-400 group-focus-within:text-blue-500"><Search size={20} /></div>
-                                     <input type="text" placeholder="搜尋財產編號或名稱..." className="w-full h-full pl-12 pr-10 py-2 bg-transparent text-sm focus:outline-none text-slate-700 font-medium placeholder:text-slate-400 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 md:opacity-100 cursor-pointer focus:cursor-text" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); if (e.target.value) { setActiveZone(null); setIsSidebarOpen(true); } }} />
+                                     <input type="text" placeholder="搜尋區域名稱、編號或財產..." className="w-full h-full pl-12 pr-10 py-2 bg-transparent text-sm focus:outline-none text-slate-700 font-medium placeholder:text-slate-400 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 md:opacity-100 cursor-pointer focus:cursor-text" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); if (e.target.value) { setActiveZone(null); setIsSidebarOpen(true); } }} />
                                      {searchTerm && (<button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full z-10"><X size={14} /></button>)}
                                 </div>
                                 <div className="flex gap-2">
@@ -779,39 +796,46 @@
                                 <div className="space-y-3">
                                     {displayItems.length > 0 ? displayItems.map((item) => (
                                         <React.Fragment key={item.id}>
-                                            {itemFormMode === 'edit' && originalItemId === item.id ? (
-                                                renderItemForm()
-                                            ) : (
-                                                <div className="bg-white border rounded-xl p-2 shadow-sm flex gap-3 items-start relative hover:shadow-md transition-shadow">
-                                                    <div className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0 border cursor-zoom-in hover:opacity-90 transition-opacity" onClick={(e) => { e.stopPropagation(); setZoomedImage(item.image); }} title="點擊放大">
-                                                        <img src={item.image} className="w-full h-full object-cover" alt={item.name} />
+                                            {item.type === 'zone' ? (
+                                                <div 
+                                                    className="bg-blue-50 border border-blue-200 rounded-xl p-3 shadow-sm flex gap-3 items-center cursor-pointer hover:bg-blue-100 transition-colors"
+                                                    onClick={() => {
+                                                        const target = inventoryData.find(z => z.id === item.id);
+                                                        if(target) {
+                                                            setActiveZone(target);
+                                                            setSearchTerm('');
+                                                            setIsSidebarOpen(true);
+                                                        }
+                                                    }}
+                                                >
+                                                    <div className="w-12 h-12 bg-blue-200 rounded-lg flex items-center justify-center shrink-0 text-blue-600">
+                                                        <MapPin size={24} />
                                                     </div>
-                                                    <div className="flex-1 min-w-0 pt-0.5">
-                                                        <h3 className="font-bold text-slate-800 truncate text-sm">{item.name}</h3><p className="text-[10px] text-slate-400 font-mono mb-1">{item.id}</p>
-                                                        <div className="flex items-center gap-1 mb-1">
-                                                            <span className="text-[10px] bg-slate-100 text-slate-600 px-1 py-0.5 rounded border">{item.quantity} {item.unit}</span>
-                                                            {item.zoneName && (
-                                                                <span 
-                                                                    className="text-[10px] bg-blue-50 text-blue-600 px-1 py-0.5 rounded border border-blue-100 flex items-center gap-0.5 cursor-pointer hover:bg-blue-100"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        const targetZone = inventoryData.find(z => z.id === item.zoneId);
-                                                                        if (targetZone) {
-                                                                            setActiveZone(targetZone);
-                                                                            setSearchTerm('');
-                                                                            setIsSidebarOpen(true);
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    <MapPin size={8} /> {item.zoneName}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <StatusBadge status={item.status} />
-                                                        {item.note && <p className="text-[10px] text-slate-500 mt-1 truncate border-t pt-1">{item.note}</p>}
+                                                    <div>
+                                                        <h3 className="font-bold text-slate-800 text-sm">區域: {item.name}</h3>
+                                                        <p className="text-xs text-slate-500">{item.description || '點擊進入區域'}</p>
                                                     </div>
-                                                    <div className="absolute bottom-2 right-2 flex gap-2"><button onClick={() => openEditMode(item)} className="text-slate-400 hover:text-blue-500"><Pencil size={14} /></button><button onClick={() => handleDeleteItem(item.id, item.zoneId)} className="text-slate-400 hover:text-red-500"><Trash2 size={14} /></button></div>
                                                 </div>
+                                            ) : (
+                                                itemFormMode === 'edit' && originalItemId === item.id ? (
+                                                    renderItemForm()
+                                                ) : (
+                                                    <div className="bg-white border rounded-xl p-2 shadow-sm flex gap-3 items-start relative hover:shadow-md transition-shadow">
+                                                        <div className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0 border cursor-zoom-in hover:opacity-90 transition-opacity" onClick={(e) => { e.stopPropagation(); setZoomedImage(item.image); }} title="點擊放大">
+                                                            <img src={item.image} className="w-full h-full object-cover" alt={item.name} />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0 pt-0.5">
+                                                            <h3 className="font-bold text-slate-800 truncate text-sm">{item.name}</h3><p className="text-[10px] text-slate-400 font-mono mb-1">{item.id}</p>
+                                                            <div className="flex items-center gap-1 mb-1">
+                                                                <span className="text-[10px] bg-slate-100 text-slate-600 px-1 py-0.5 rounded border">{item.quantity} {item.unit}</span>
+                                                                {item.zoneName && <span className="text-[10px] bg-blue-50 text-blue-600 px-1 py-0.5 rounded border border-blue-100 flex items-center gap-0.5 cursor-pointer hover:bg-blue-100" onClick={(e) => { e.stopPropagation(); const target = inventoryData.find(z => z.id === item.zoneId); if(target) { setActiveZone(target); setSearchTerm(''); setIsSidebarOpen(true); } }}><MapPin size={8} /> {item.zoneName}</span>}
+                                                            </div>
+                                                            <StatusBadge status={item.status} />
+                                                            {item.note && <p className="text-[10px] text-slate-500 mt-1 truncate border-t pt-1">{item.note}</p>}
+                                                        </div>
+                                                        <div className="absolute bottom-2 right-2 flex gap-2"><button onClick={() => openEditMode(item)} className="text-slate-400 hover:text-blue-500"><Pencil size={14} /></button><button onClick={() => handleDeleteItem(item.id, item.zoneId)} className="text-slate-400 hover:text-red-500"><Trash2 size={14} /></button></div>
+                                                    </div>
+                                                )
                                             )}
                                         </React.Fragment>
                                     )) : <div className="text-center py-8 text-slate-400"><Package size={32} className="mx-auto mb-2 opacity-20" /><p className="text-xs">無資料</p></div>}
