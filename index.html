@@ -46,18 +46,10 @@
 
         /* 自定義縮小的光暈動畫 (Halo Effect) */
         @keyframes ping-small {
-            0% {
-                transform: scale(1); 
-                opacity: 0.6; 
-            }
-            100% {
-                transform: scale(2.0); 
-                opacity: 0; 
-            }
+            0% { transform: scale(1); opacity: 0.6; }
+            100% { transform: scale(2.0); opacity: 0; }
         }
-        .animate-ping-small {
-            animation: ping-small 2s cubic-bezier(0, 0, 0.2, 1) infinite;
-        }
+        .animate-ping-small { animation: ping-small 2s cubic-bezier(0, 0, 0.2, 1) infinite; }
     </style>
 </head>
 <body class="bg-gray-50 text-slate-800 h-[100dvh] w-screen overflow-hidden">
@@ -174,8 +166,6 @@
             const lastTouchCenter = useRef(null); 
             const isDraggingMap = useRef(false);
             const lastMousePos = useRef({ x: 0, y: 0 });
-            
-            // 雙擊縮放
             const lastTapRef = useRef(0);
 
             const [isItemDragOver, setIsItemDragOver] = useState(false);
@@ -240,7 +230,7 @@
                     const scaleSensitivity = 0.001;
                     const delta = -e.deltaY * scaleSensitivity;
                     const oldScale = transformRef.current.scale;
-                    const newScale = Math.min(Math.max(0.5, oldScale + delta), 10); // 修改：最大放大 10 倍
+                    const newScale = Math.min(Math.max(0.5, oldScale + delta), 10);
                     
                     const mapMouseX = (mouseX - transformRef.current.x) / oldScale;
                     const mapMouseY = (mouseY - transformRef.current.y) / oldScale;
@@ -276,17 +266,15 @@
                 }
             };
 
-            // 新增：雙擊放大邏輯
             const handleDoubleTap = (clientX, clientY) => {
                 const now = Date.now();
                 if (now - lastTapRef.current < 300) {
-                    // Double tap detected
                     const rect = mapContainerRef.current.getBoundingClientRect();
                     const touchX = clientX - rect.left - rect.width / 2;
                     const touchY = clientY - rect.top - rect.height / 2;
 
                     const oldScale = transformRef.current.scale;
-                    const newScale = Math.min(oldScale * 2, 10); // 放大 2 倍，上限 10
+                    const newScale = Math.min(oldScale * 2, 10);
 
                     const mapTouchX = (touchX - transformRef.current.x) / oldScale;
                     const mapTouchY = (touchY - transformRef.current.y) / oldScale;
@@ -298,7 +286,6 @@
                     if (mapRef.current) mapRef.current.style.transition = 'transform 0.3s ease-out';
                     requestUpdateMapStyle();
                     
-                    // Reset tap to prevent triple tap weirdness
                     lastTapRef.current = 0; 
                     return true;
                 }
@@ -312,7 +299,6 @@
                 if (mapRef.current) mapRef.current.style.transition = 'none'; 
 
                 if (e.touches.length === 1) {
-                    // 檢查雙擊
                     const isDoubleTap = handleDoubleTap(e.touches[0].clientX, e.touches[0].clientY);
                     if(!isDoubleTap) {
                         lastMousePos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -331,7 +317,7 @@
 
             const handleMapTouchMove = (e) => {
                 if (draggingId) return;
-                if (e.cancelable) e.preventDefault(); // 強制接管，防止瀏覽器原生縮放
+                if (e.cancelable) e.preventDefault();
                 
                 if (e.touches.length === 1 && isDraggingMap.current) {
                     const dx = e.touches[0].clientX - lastMousePos.current.x;
@@ -355,7 +341,7 @@
 
                     const ratio = dist / lastTouchDistance.current;
                     const oldScale = transformRef.current.scale;
-                    const newScale = Math.min(Math.max(0.5, oldScale * ratio), 10); // 修改：最大放大 10 倍
+                    const newScale = Math.min(Math.max(0.5, oldScale * ratio), 10);
                     
                     if (lastTouchCenter.current) {
                         const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
@@ -391,22 +377,30 @@
                 }
             };
 
+            // 關鍵新增：針對 iOS 的手勢攔截
+            const handleGestureStart = (e) => {
+                e.preventDefault();
+            };
+
             useEffect(() => {
                 const el = mapContainerRef.current;
                 if (!el) return;
+                
                 el.addEventListener('wheel', handleWheel, { passive: false });
                 el.addEventListener('touchstart', handleMapTouchStart, { passive: false });
                 el.addEventListener('touchmove', handleMapTouchMove, { passive: false });
                 el.addEventListener('touchend', handleMapTouchEnd);
+                el.addEventListener('gesturestart', handleGestureStart); // 新增
+                
                 return () => {
                     el.removeEventListener('wheel', handleWheel);
                     el.removeEventListener('touchstart', handleMapTouchStart);
                     el.removeEventListener('touchmove', handleMapTouchMove);
                     el.removeEventListener('touchend', handleMapTouchEnd);
+                    el.removeEventListener('gesturestart', handleGestureStart); // 新增
                 };
             }, [draggingId]); 
 
-            // --- 圖片壓縮 ---
             const handleImageUpload = async (event) => {
                 const file = event.target.files[0];
                 if (file) {
@@ -427,7 +421,6 @@
                 }
             };
 
-            // --- 座標拖曳邏輯 ---
             const handleMarkerMouseDown = (e, id) => {
                 if (!isEditing) return; 
                 e.stopPropagation(); e.preventDefault();
@@ -467,7 +460,6 @@
                 };
             }, [draggingId]);
 
-            // --- 一般功能函式 ---
             const handleItemDragOver = (e) => { e.preventDefault(); e.stopPropagation(); setIsItemDragOver(true); };
             const handleItemDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); setIsItemDragOver(false); };
             const handleItemDrop = async (e) => {
@@ -500,19 +492,12 @@
                 if (!formData.id || !formData.name) { alert('請輸入財產編號與名稱'); return; }
                 const targetZoneId = formData.zoneId;
                 if (!targetZoneId) { alert('請選擇區域'); return; }
-
-                const itemToSave = { 
-                    ...formData, 
-                    image: formData.image || 'https://placehold.co/150/gray/white?text=No+Image' 
-                };
-
+                const itemToSave = { ...formData, image: formData.image || 'https://placehold.co/150/gray/white?text=No+Image' };
                 setInventoryData(prevData => {
                     let newData = [...prevData];
                     if (itemFormMode === 'edit' && originalZoneId && originalZoneId !== targetZoneId) {
                         newData = newData.map(z => {
-                            if (z.id === originalZoneId) {
-                                return { ...z, items: z.items.filter(i => i.id !== originalItemId) };
-                            }
+                            if (z.id === originalZoneId) { return { ...z, items: z.items.filter(i => i.id !== originalItemId) }; }
                             return z;
                         });
                     }
@@ -526,10 +511,7 @@
                         }
                         return z;
                     });
-                    if (activeZone) {
-                        const newActiveZone = newData.find(z => z.id === activeZone.id);
-                        setActiveZone(newActiveZone);
-                    }
+                    if (activeZone) { const newActiveZone = newData.find(z => z.id === activeZone.id); setActiveZone(newActiveZone); }
                     return newData;
                 });
                 setItemFormMode('closed');
@@ -608,12 +590,7 @@
                     const results = [];
                     inventoryData.forEach(zone => {
                         if (zone.name.includes(searchTerm)) {
-                            results.push({
-                                id: zone.id,
-                                name: zone.name,
-                                description: zone.description,
-                                type: 'zone' 
-                            });
+                            results.push({ id: zone.id, name: zone.name, description: zone.description, type: 'zone' });
                         }
                         zone.items.forEach(item => {
                             if (item.name.includes(searchTerm) || item.id.includes(searchTerm)) {
@@ -638,18 +615,13 @@
                     <div className="space-y-2">
                         <div className="flex flex-col gap-1">
                             <label className="text-[10px] text-slate-500 font-bold uppercase">所屬區域</label>
-                            <select 
-                                className="w-full px-2 py-1.5 border rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                value={formData.zoneId || ''}
-                                onChange={(e) => setFormData({...formData, zoneId: e.target.value})}
-                            >
+                            <select className="w-full px-2 py-1.5 border rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" value={formData.zoneId || ''} onChange={(e) => setFormData({...formData, zoneId: e.target.value})} >
                                 <option value="" disabled>請選擇區域</option>
                                 {inventoryData.map(zone => (
                                     <option key={zone.id} value={zone.id}>{zone.name}</option>
                                 ))}
                             </select>
                         </div>
-
                         <div className="flex items-center gap-2">
                             <div className={`w-12 h-12 bg-slate-200 rounded flex items-center justify-center overflow-hidden cursor-pointer transition-all ${isItemDragOver ? 'ring-2 ring-blue-500 scale-110 bg-blue-100' : ''}`} onClick={() => itemFileInputRef.current.click()} onDragOver={handleItemDragOver} onDragLeave={handleItemDragLeave} onDrop={handleItemDrop}>
                                 {formData.image ? <img src={formData.image} className="w-full h-full object-cover"/> : <ImageIcon size={20} className="text-slate-400"/>}
@@ -745,13 +717,13 @@
                                             top: zone.coordinates.top, 
                                             left: zone.coordinates.left, 
                                             touchAction: 'none',
-                                            pointerEvents: 'none' // 容器不感應點擊，避免點到空白處觸發
+                                            pointerEvents: 'none'
                                         }}
                                     >
                                         <div style={{ transform: `scale(var(--map-scale-inverse, 1))`, transformOrigin: 'center center' }} className="flex flex-col items-center">
                                             <div 
                                                 className="relative" 
-                                                style={{ width: `${markerSize}px`, height: `${markerSize}px`, pointerEvents: 'auto' }} // 只有圖示感應點擊
+                                                style={{ width: `${markerSize}px`, height: `${markerSize}px`, pointerEvents: 'auto' }}
                                             >
                                                 {!isEditing && <span className={`absolute inset-0 rounded-full animate-ping-small ${zone.color}`} style={{ pointerEvents: 'none' }}></span>}
                                                 <div className={`relative w-full h-full inline-flex items-center justify-center rounded-full shadow-lg border-2 border-white text-white ${zone.color} ${isEditing && 'ring-2 ring-white ring-offset-2 ring-offset-yellow-500'}`}>
@@ -762,7 +734,7 @@
                                             {(!isEditing || activeZone?.id === zone.id) && (
                                                 <div 
                                                     className="mt-1 px-2 py-0.5 bg-black/70 backdrop-blur-sm text-white text-[12px] font-medium rounded shadow-sm whitespace-nowrap border border-white/20"
-                                                    style={{ pointerEvents: 'auto' }} // 文字標籤也可感應
+                                                    style={{ pointerEvents: 'auto' }}
                                                 >
                                                     {zone.name}
                                                 </div>
@@ -798,7 +770,7 @@
                             <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3 items-end ui-interactive" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                                 <div className="relative shadow-lg rounded-full w-12 h-12 md:w-64 bg-white/90 backdrop-blur-sm border border-slate-200 transition-all duration-300 ease-in-out focus-within:w-64 md:focus-within:w-80 group overflow-hidden search-expand flex items-center justify-end">
                                      <div className="absolute left-0 top-0 h-full w-12 flex items-center justify-center pointer-events-none text-slate-400 group-focus-within:text-blue-500"><Search size={20} /></div>
-                                     <input type="text" placeholder="搜尋財產編號或名稱..." className="w-full h-full pl-12 pr-10 py-2 bg-transparent text-sm focus:outline-none text-slate-700 font-medium placeholder:text-slate-400 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 md:opacity-100 cursor-pointer focus:cursor-text" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); if (e.target.value) { setActiveZone(null); setIsSidebarOpen(true); } }} />
+                                     <input type="text" placeholder="搜尋區域名稱、編號或財產..." className="w-full h-full pl-12 pr-10 py-2 bg-transparent text-sm focus:outline-none text-slate-700 font-medium placeholder:text-slate-400 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 md:opacity-100 cursor-pointer focus:cursor-text" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); if (e.target.value) { setActiveZone(null); setIsSidebarOpen(true); } }} />
                                      {searchTerm && (<button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full z-10"><X size={14} /></button>)}
                                 </div>
                                 <div className="flex gap-2">
