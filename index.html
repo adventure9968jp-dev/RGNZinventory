@@ -378,21 +378,11 @@
             const handleMarkerMove = (clientX, clientY) => {
                 if (!draggingId || !mapRef.current) return;
                 const rect = mapRef.current.getBoundingClientRect();
-                
-                // 計算滑鼠相對於元素左上角的位移
                 let x = clientX - rect.left;
                 let y = clientY - rect.top;
-
-                // 轉成百分比
                 let leftPercent = Math.max(0, Math.min(100, (x / rect.width) * 100));
                 let topPercent = Math.max(0, Math.min(100, (y / rect.height) * 100));
-
-                setInventoryData(prev => prev.map(zone => {
-                    if (zone.id === draggingId) {
-                        return { ...zone, coordinates: { top: `${topPercent.toFixed(1)}%`, left: `${leftPercent.toFixed(1)}%` } };
-                    }
-                    return zone;
-                }));
+                setInventoryData(prev => prev.map(zone => zone.id === draggingId ? { ...zone, coordinates: { top: `${topPercent.toFixed(1)}%`, left: `${leftPercent.toFixed(1)}%` } } : zone));
             };
             const handleMarkerMouseMove = (e) => handleMarkerMove(e.clientX, e.clientY);
             const handleMarkerTouchMove = (e) => { 
@@ -636,11 +626,12 @@
                                             e.stopPropagation(); 
                                             if (!isEditing) { setActiveZone(zone); setSearchTerm(''); setItemFormMode('closed'); } 
                                         }} 
-                                        // 修改：定位點改為 -translate-y-full，讓底部尖端對齊座標
-                                        className={`absolute transform -translate-x-1/2 -translate-y-full z-10 ${activeZone?.id === zone.id ? 'z-20' : ''} ${isEditing ? 'cursor-move' : 'cursor-pointer'}`} 
+                                        // 修改：定位點改為 -translate-y-1/2 (垂直置中)
+                                        className={`absolute transform -translate-x-1/2 -translate-y-1/2 z-10 ${activeZone?.id === zone.id ? 'z-20' : ''} ${isEditing ? 'cursor-move' : 'cursor-pointer'}`} 
                                         style={{ top: zone.coordinates.top, left: zone.coordinates.left, touchAction: 'none' }}
                                     >
-                                        <div style={{ transform: `scale(var(--map-scale-inverse, 1))`, transformOrigin: 'bottom center' }} className="flex flex-col items-center">
+                                        {/* 修改：變形原點改為 center center */}
+                                        <div style={{ transform: `scale(var(--map-scale-inverse, 1))`, transformOrigin: 'center center' }} className="flex flex-col items-center">
                                             <div className="relative" style={{ width: `${markerSize}px`, height: `${markerSize}px` }}>
                                                 {!isEditing && <span className={`absolute inset-0 rounded-full animate-ping-small ${zone.color}`}></span>}
                                                 <div className={`relative w-full h-full inline-flex items-center justify-center rounded-full shadow-lg border-2 border-white text-white ${zone.color} ${isEditing && 'ring-2 ring-white ring-offset-2 ring-offset-yellow-500'}`}>
